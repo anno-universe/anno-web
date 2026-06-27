@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Outlet, useParams, NavLink, useNavigate } from "react-router";
-import { getProject, deleteProject } from "@/api/projects";
+import { Outlet, useParams, NavLink } from "react-router";
+import { getProject } from "@/api/projects";
 import { ProjectRoleBadge } from "@/components/project/ProjectRoleBadge";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
-import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import type { ProjectOutput } from "@/types/project";
 
 export interface ProjectContext {
@@ -20,14 +19,11 @@ function tabClassName({ isActive }: { isActive: boolean }) {
 
 export default function ProjectLayout() {
   const { projectId } = useParams();
-  const navigate = useNavigate();
   const id = Number(projectId);
 
   const [project, setProject] = useState<ProjectOutput | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const fetchProject = useCallback(async () => {
     setLoading(true);
@@ -45,19 +41,6 @@ export default function ProjectLayout() {
   useEffect(() => {
     fetchProject();
   }, [fetchProject]);
-
-  async function handleDelete() {
-    setDeleting(true);
-    try {
-      await deleteProject(id);
-      navigate("/projects", { replace: true });
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to delete project");
-      setShowDeleteConfirm(false);
-    } finally {
-      setDeleting(false);
-    }
-  }
 
   // Only render Outlet when we have project data — children receive guaranteed project
   if (loading) {
@@ -104,15 +87,6 @@ export default function ProjectLayout() {
             )}
           </div>
         </div>
-        {isSupervisor && (
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            disabled={deleting}
-            className="rounded-md border border-destructive/50 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
-          >
-            Delete Project
-          </button>
-        )}
       </div>
 
       {isWorker && (
@@ -151,15 +125,6 @@ export default function ProjectLayout() {
 
       {/* Child content */}
       <Outlet context={{ project, refreshProject: fetchProject }} />
-
-      <ConfirmDialog
-        open={showDeleteConfirm}
-        title="Delete Project"
-        message={`Are you sure you want to delete "${project.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
-        onConfirm={handleDelete}
-        onCancel={() => setShowDeleteConfirm(false)}
-      />
     </div>
   );
 }

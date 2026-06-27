@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useParams, useOutletContext } from "react-router";
+import { useEffect, useState, useCallback } from "react";
+import { Link, useParams, useOutletContext, useNavigate } from "react-router";
 import { getImages } from "@/api/images";
 import { AuthenticatedImage } from "@/components/image/AuthenticatedImage";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -18,7 +18,8 @@ import type { ProjectContext } from "./_app.projects.$projectId";
 const DEFAULT_LIMIT = 20;
 
 function imageColumns(
-  projectId: number
+  projectId: number,
+  onAnnotate: (imageId: number) => void,
 ): Column<Image2DOutput>[] {
   return [
     {
@@ -67,12 +68,13 @@ function imageColumns(
       header: "",
       className: "w-24",
       render: (img) => (
-        <Link
-          to={`/projects/${projectId}/images/${img.id}/annotate`}
-          className="text-xs font-medium text-primary hover:underline"
+        <button
+          type="button"
+          onClick={() => onAnnotate(img.id)}
+          className="cursor-pointer rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
         >
-          Annotate →
-        </Link>
+          Annotate
+        </button>
       ),
     },
   ];
@@ -81,6 +83,7 @@ function imageColumns(
 export default function ImagesPage() {
   const { projectId } = useParams();
   const pid = Number(projectId);
+  const navigate = useNavigate();
   const { project } = useOutletContext<ProjectContext>();
 
   const [images, setImages] = useState<Image2DOutput[]>([]);
@@ -93,6 +96,13 @@ export default function ImagesPage() {
   const [error, setError] = useState("");
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
+
+  const handleAnnotate = useCallback(
+    (imageId: number) => {
+      navigate(`/projects/${pid}/images/${imageId}/annotate`);
+    },
+    [navigate, pid],
+  );
 
   async function fetchImages(limit: number, offset: number) {
     setLoading(true);
@@ -158,7 +168,7 @@ export default function ImagesPage() {
         <EmptyState message="No images yet." />
       ) : (
         <PaginatedTable
-          columns={imageColumns(pid)}
+          columns={imageColumns(pid, handleAnnotate)}
           rows={images}
           pagination={pagination}
           onPageChange={handlePageChange}

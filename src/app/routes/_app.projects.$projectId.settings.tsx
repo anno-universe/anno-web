@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useParams, useOutletContext } from "react-router";
-import { updateProject } from "@/api/projects";
+import { useParams, useOutletContext, useNavigate } from "react-router";
+import { updateProject, deleteProject } from "@/api/projects";
 import { LabelMappingEditor } from "@/components/project/LabelMappingEditor";
 import { AnnotationSettings } from "@/components/project/AnnotationSettings";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import {
   needsProjectConfigUpgrade,
   upgradeLabelMappingConfig,
@@ -18,11 +19,14 @@ import type { ProjectContext } from "./_app.projects.$projectId";
 export default function ProjectSettingsPage() {
   const { projectId } = useParams();
   const id = Number(projectId);
+  const navigate = useNavigate();
   const { project, refreshProject } = useOutletContext<ProjectContext>();
 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Form state — initialized from context project
   const [name, setName] = useState(project.name);
@@ -89,6 +93,19 @@ export default function ProjectSettingsPage() {
       setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await deleteProject(id);
+      navigate("/projects", { replace: true });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete project");
+      setShowDeleteConfirm(false);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -177,6 +194,35 @@ export default function ProjectSettingsPage() {
           </button>
         )}
       </form>
+
+      {isSupervisor && (
+        <div className="mt-10 rounded-md border border-destructive/30 p-4">
+          <h3 className="text-sm font-semibold text-destructive">
+            Danger Zone
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Once you delete a project, there is no going back. All images,
+            annotations, and member data will be permanently removed.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={deleting}
+            className="mt-3 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20 disabled:opacity-50"
+          >
+            {deleting ? "Deleting…" : "Delete Project"}
+          </button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Delete Project"
+        message={`Are you sure you want to delete "${project.name}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 }
