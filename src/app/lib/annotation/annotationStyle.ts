@@ -9,7 +9,12 @@ import Text from "ol/style/Text";
 import Point from "ol/geom/Point";
 import MultiPoint from "ol/geom/MultiPoint";
 import Polygon from "ol/geom/Polygon";
+import LineString from "ol/geom/LineString";
 import { getLabelColor } from "@/lib/utils/labelMapping";
+import { rotateHandleAnchor } from "./mapInteractions";
+
+/** Rotation handle colour — distinct from any label colour. */
+const ROTATE_HANDLE_COLOR = "#0EA5E9"; // sky-500
 
 function hexToRgb(hex: string): [number, number, number] {
   const clean = hex.replace("#", "");
@@ -99,6 +104,35 @@ function vertexHandlesStyleFor(color: string): Style {
   });
   vertexHandleStyleCache.set(color, style);
   return style;
+}
+
+/**
+ * Rotation handle for a box: a short connector line from the top-edge midpoint
+ * out to a filled circle.  The position is computed by `rotateHandleAnchor`
+ * (the SAME function the interaction hit-tests against), so the drawn handle and
+ * the grabbable handle always coincide.  `resolution` keeps the pixel gap
+ * constant across zoom — that is why these styles are built fresh per render
+ * (only ever for the single box being edited/drafted, so the cost is trivial).
+ */
+function rotateHandleStyles(
+  corners: [number, number][],
+  resolution: number
+): Style[] {
+  const { handle, edgeMid } = rotateHandleAnchor(corners, resolution);
+  return [
+    new Style_({
+      geometry: new LineString([edgeMid, handle]),
+      stroke: new Stroke({ color: ROTATE_HANDLE_COLOR, width: 1.5 }),
+    }),
+    new Style_({
+      geometry: new Point(handle),
+      image: new Circle({
+        radius: 6,
+        fill: new Fill({ color: ROTATE_HANDLE_COLOR }),
+        stroke: new Stroke({ color: "white", width: 2 }),
+      }),
+    }),
+  ];
 }
 
 /**
@@ -209,7 +243,9 @@ export function featureStyleFunction(
   feature: Feature,
   selectedId: number | null,
   editingId: number | null,
-  labelMapping: Record<string, unknown>
+  labelMapping: Record<string, unknown>,
+  boxRotationEnabled = false,
+  resolution = 1
 ): Style | Style[] {
   const id = feature.getId() as number | undefined;
   const label = feature.get("label") as number | null;
@@ -226,12 +262,28 @@ export function featureStyleFunction(
 
   const base = annotationStyle({ isSelected, isEditing, isDraft, color });
 
+  // A box draft is an editable preview (resize + rotate before labelling), so
+  // it shows the same handles as an explicit edit session.
+  const isBoxDraftPreview = isDraft && annType === "box" && boxRotationEnabled;
+  const showHandles = isEditing || isBoxDraftPreview;
+
   // While editing a polygon or box, overlay a persistent handle on every ring
-  // vertex so all corners/key points are visible and draggable. Box editing now
+  // vertex so all corners/key points are visible and draggable. Box editing
   // uses the native BoxEditInteraction (no built-in handles of its own), so it
   // needs these dots too.
-  if (isEditing && (annType === "polygon" || annType === "box")) {
-    return [base, vertexHandlesStyleFor(darkenHex(color, 0.28))];
+  if (showHandles && (annType === "polygon" || annType === "box")) {
+    const styles = [base, vertexHandlesStyleFor(darkenHex(color, 0.28))];
+    // Rotation handle, only for boxes when the project enables it.
+    if (annType === "box" && boxRotationEnabled) {
+      const g = feature.getGeometry();
+      if (g instanceof Polygon) {
+        const corners = g.getCoordinates()[0].slice(0, 4) as [number, number][];
+        if (corners.length === 4) {
+          styles.push(...rotateHandleStyles(corners, resolution));
+        }
+      }
+    }
+    return styles;
   }
 
   return base;

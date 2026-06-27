@@ -16,6 +16,7 @@ import ImageLayer from "ol/layer/Image";
 import StaticImage from "ol/source/ImageStatic";
 import Point from "ol/geom/Point";
 import MultiPoint from "ol/geom/MultiPoint";
+import Polygon from "ol/geom/Polygon";
 import Modify from "ol/interaction/Modify";
 import DoubleClickZoom from "ol/interaction/DoubleClickZoom";
 import type { default as OLMap } from "ol/Map";
@@ -25,6 +26,16 @@ import { apiGetBlob } from "@/api/client";
 // Sentinel id for the not-yet-committed annotation being drawn (awaiting a
 // label). Negative so it never collides with real backend ids.
 const DRAFT_ID = -1;
+
+/** Reorder a box feature's ring so the rotate handle binds to its top edge. */
+function normalizeBoxFeatureWinding(feature: Feature): void {
+  const g = feature.getGeometry();
+  if (!(g instanceof Polygon)) return;
+  const corners = g.getCoordinates()[0].slice(0, 4) as [number, number][];
+  if (corners.length !== 4) return;
+  const ring = normalizeBoxTopEdge(corners);
+  feature.setGeometry(new Polygon([[...ring, ring[0]]]));
+}
 import {
   annotationToFeature,
   featureToAnnotationInput,
@@ -44,6 +55,7 @@ import {
   createKeypointModifyInteraction,
   createBoxEditInteraction,
   createPolygonEditInteraction,
+  normalizeBoxTopEdge,
 } from "@/lib/annotation/mapInteractions";
 import { mapToImage } from "@/lib/annotation/imageProjection";
 import type {
@@ -77,6 +89,12 @@ export interface AnnotationMapHandle {
   cancelKeypointGroup: () => void;
   /** Remove the draft feature once the parent has created (or discarded) it. */
   clearDraft: () => void;
+  /**
+   * Read the live geometry of the on-map draft (id = -1) as a create payload.
+   * Returns null when no draft is present. The page calls this just before
+   * POSTing so resize/rotate edits applied to the preview box are included.
+   */
+  getDraftAnnotationInput: () => Annotation2DCreateInput | null;
   /**
    * Capture a serialisable snapshot of an annotation's current geometry +
    * label. Called by the page just before dispatching START_EDIT so the
@@ -114,6 +132,8 @@ interface Props {
   onEditStateChange?: (dirty: boolean) => void;
   /** Report the number of points in the in-progress keypoint group */
   onKeypointDraftChange?: (count: number) => void;
+  /** Project flag: expose a rotation handle when editing/drafting boxes. */
+  boxRotationEnabled?: boolean;
 }
 
 export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
@@ -138,6 +158,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       overlayContainerRef,
       onEditStateChange,
       onKeypointDraftChange,
+      boxRotationEnabled,
     },
     ref
   ) {
@@ -155,6 +176,9 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       useRef<ReturnType<typeof createBoxEditInteraction> | null>(null);
     const polyEditRef =
       useRef<ReturnType<typeof createPolygonEditInteraction> | null>(null);
+    // Box-edit interaction attached to the live draft preview (id = -1).
+    const draftEditRef =
+      useRef<ReturnType<typeof createBoxEditInteraction> | null>(null);
     const drawBoxRef =
       useRef<ReturnType<typeof createDrawBoxInteraction> | null>(null);
     const drawPolygonRef =
@@ -202,6 +226,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     const onAnnotationContextMenuRef = useRef(onAnnotationContextMenu);
     const onEditStateChangeRef = useRef(onEditStateChange);
     const onKeypointDraftChangeRef = useRef(onKeypointDraftChange);
+    const boxRotationEnabledRef = useRef(boxRotationEnabled);
 
     activeToolRef.current = activeTool;
     selectedIdRef.current = selectedAnnotationId;
@@ -216,6 +241,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     onAnnotationContextMenuRef.current = onAnnotationContextMenu;
     onEditStateChangeRef.current = onEditStateChange;
     onKeypointDraftChangeRef.current = onKeypointDraftChange;
+    boxRotationEnabledRef.current = boxRotationEnabled;
 
     // ---- Edit-session helpers ----
     const notifyDirty = useCallback((dirty: boolean) => {
@@ -322,14 +348,18 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         if (!overlay || !source) return;
         const targetId = hasDraftRef.current ? DRAFT_ID : selectedIdRef.current;
         if (targetId != null) {
-          const geom = source.getFeatureById(targetId)?.getGeometry();
+          const feat = source.getFeatureById(targetId);
+          const geom = feat?.getGeometry();
           if (geom) {
-            // Anchor the card ABOVE the feature's top edge — never over its
-            // center. The Overlay uses stopEvent:true, so its DOM swallows the
-            // pointer-downs that the Modify interaction needs to grab vertices;
-            // placing it over the geometry makes vertices under the card
-            // un-draggable. We pick whichever horizontal edge sits higher on
-            // screen so it works regardless of image Y orientation.
+            // A box with rotation enabled reserves its top edge for the rotate
+            // handle, so the card is anchored BELOW the box (lower screen edge,
+            // growing downward). Every other case keeps the original behaviour:
+            // anchored above the higher screen edge, growing upward — the
+            // Overlay uses stopEvent:true, so keeping it off the geometry keeps
+            // the vertices under it draggable.
+            const rotationBox =
+              boxRotationEnabledRef.current === true &&
+              feat?.get("annotation_type") === "box";
             const [minX, minY, maxX, maxY] = geom.getExtent();
             const cx = (minX + maxX) / 2;
             let anchor: [number, number] = [cx, maxY];
@@ -337,8 +367,17 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
               const pTop = map.getPixelFromCoordinate([cx, minY]);
               const pBot = map.getPixelFromCoordinate([cx, maxY]);
               if (pTop && pBot) {
-                anchor = pTop[1] < pBot[1] ? [cx, minY] : [cx, maxY];
+                const higher = pTop[1] < pBot[1] ? [cx, minY] : [cx, maxY];
+                const lower = pTop[1] < pBot[1] ? [cx, maxY] : [cx, minY];
+                anchor = (rotationBox ? lower : higher) as [number, number];
               }
+            }
+            if (rotationBox) {
+              overlay.setPositioning("top-center");
+              overlay.setOffset([0, 12]);
+            } else {
+              overlay.setPositioning("bottom-center");
+              overlay.setOffset([0, -10]);
             }
             overlay.setPosition(anchor);
             return;
@@ -348,13 +387,55 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       });
     }, []);
 
+    // Attach a rotation-capable box editor to the draft preview, so the user
+    // can resize / rotate it before choosing a label. onChange re-anchors the
+    // floating card so it tracks the box.
+    const activateDraftBoxEdit = useCallback(
+      (feature: Feature) => {
+        const map = mapRef.current;
+        if (!map) return;
+        const edit = createBoxEditInteraction(feature, {
+          rotationEnabled: true,
+          onChange: () => positionOverlay(),
+          onEnd: () => positionOverlay(),
+        });
+        map.addInteraction(edit);
+        draftEditRef.current = edit;
+      },
+      [positionOverlay]
+    );
+
     const clearDraft = useCallback(() => {
+      // Tear down the draft editor first so it never fires on a removed feature.
+      if (draftEditRef.current) {
+        mapRef.current?.removeInteraction(draftEditRef.current);
+        draftEditRef.current = null;
+      }
       const src = vectorSourceRef.current;
       const f = src?.getFeatureById(DRAFT_ID);
       if (f) src?.removeFeature(f);
       hasDraftRef.current = false;
+      // The box draw tool was suspended while the preview was editable — restore
+      // it if the user is still on the box tool.
+      if (activeToolRef.current === "draw-box") {
+        drawBoxRef.current?.setActive(true);
+      }
       positionOverlay();
     }, [positionOverlay]);
+
+    // Read the live draft geometry as a create payload (resize/rotate included).
+    const getDraftAnnotationInput =
+      useCallback((): Annotation2DCreateInput | null => {
+        const feature = vectorSourceRef.current?.getFeatureById(DRAFT_ID);
+        if (!feature) return null;
+        const type = (feature.get("annotation_type") || "box") as AnnotationType;
+        const label = (feature.get("label") ?? null) as number | null;
+        try {
+          return featureToAnnotationInput(feature, type, label);
+        } catch {
+          return null;
+        }
+      }, []);
 
     // Put a freshly drawn shape on the map as a draft and ask the parent to
     // open the label chooser. Replaces any previous draft.
@@ -371,12 +452,28 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         feature.setId(DRAFT_ID);
         feature.set("annotation_type", type);
         feature.set("label", null);
+
+        const editableBox =
+          type === "box" && boxRotationEnabledRef.current === true;
+
+        // Bind the rotate handle to the box's top edge by normalising the ring
+        // winding (createBox()'s winding starts on a vertical edge).
+        if (editableBox) normalizeBoxFeatureWinding(feature);
+
         src.addFeature(feature);
         hasDraftRef.current = true;
+
+        // Make the box draft an editable preview: suspend the draw tool (so its
+        // pointer events reach the resize/rotate handles) and attach the editor.
+        if (editableBox) {
+          drawBoxRef.current?.setActive(false);
+          activateDraftBoxEdit(feature);
+        }
+
         positionOverlay();
         onDrawCompleteRef.current?.(input);
       },
-      [positionOverlay]
+      [positionOverlay, activateDraftBoxEdit]
     );
 
     // ---- Keypoint draft-group helpers ----
@@ -524,6 +621,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         finishKeypointGroup,
         cancelKeypointGroup,
         clearDraft,
+        getDraftAnnotationInput,
         captureAnnotationSnapshot,
       }),
       [
@@ -536,6 +634,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         finishKeypointGroup,
         cancelKeypointGroup,
         clearDraft,
+        getDraftAnnotationInput,
         captureAnnotationSnapshot,
       ]
     );
@@ -554,12 +653,14 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         renderBuffer: 16,
         updateWhileAnimating: false,
         updateWhileInteracting: false,
-        style: (feature) =>
+        style: (feature, resolution) =>
           featureStyleFunction(
             feature as Feature,
             selectedIdRef.current,
             editingIdRefMirror.current,
-            labelMappingRef.current
+            labelMappingRef.current,
+            boxRotationEnabledRef.current === true,
+            resolution
           ),
       });
       vectorLayerRef.current = vectorLayer;
@@ -811,6 +912,10 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         map.removeInteraction(select);
         map.removeInteraction(drawBox);
         map.removeInteraction(drawPolygon);
+        if (draftEditRef.current) {
+          map.removeInteraction(draftEditRef.current);
+          draftEditRef.current = null;
+        }
         selectRef.current = null;
         drawBoxRef.current = null;
         drawPolygonRef.current = null;
@@ -821,7 +926,11 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       selectRef.current?.setActive(
         activeTool === "select" && editingAnnotationId == null
       );
-      drawBoxRef.current?.setActive(activeTool === "draw-box");
+      // Keep the box draw suspended while a draft preview is being edited, so
+      // its pointer events don't compete with the resize/rotate handles.
+      drawBoxRef.current?.setActive(
+        activeTool === "draw-box" && !hasDraftRef.current
+      );
       drawPolygonRef.current?.setActive(activeTool === "draw-polygon");
 
       if (previousToolRef.current === "draw-point" && activeTool !== "draw-point") {
@@ -933,9 +1042,14 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
             // Box: native Pointer interaction — grab a corner to resize
             // (rectangle-preserving, opposite corner anchored) or drag the
             // interior to move. Replaces ol-ext's Transform.
+            // Put the rotate handle above the box's top edge before editing.
+            if (boxRotationEnabledRef.current === true) {
+              normalizeBoxFeatureWinding(feature);
+            }
             const boxEdit = createBoxEditInteraction(feature, {
               onChange: () => notifyDirty(true),
               onEnd: () => notifyDirty(true),
+              rotationEnabled: boxRotationEnabledRef.current === true,
             });
             map.addInteraction(boxEdit);
             boxEditRef.current = boxEdit;

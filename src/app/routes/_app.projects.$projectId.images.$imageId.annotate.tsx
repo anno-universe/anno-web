@@ -308,9 +308,13 @@ export default function AnnotatePage() {
     const s = stateRef.current;
     if (s.type !== "drafting") return;
 
+    // The preview box may have been resized/rotated after it was drawn, so read
+    // the live geometry off the map (falling back to the original draw payload).
+    const liveInput = mapRef.current?.getDraftAnnotationInput();
+
     commitDraftRequest();
     const created = await commitCreate({
-      ...s.pendingCreate,
+      ...(liveInput ?? s.pendingCreate),
       label: s.selectedLabel,
     });
     if (!created) {
@@ -590,6 +594,7 @@ export default function AnnotatePage() {
     project?.meta_info as Record<string, unknown>
   );
   const keypointEnabled = metaInfo.keypoint_enabled !== false;
+  const boxRotationEnabled = metaInfo.box_rotation_enabled === true;
 
   // Selected annotation for the info card
   const selectedAnnotation = useMemo(() => {
@@ -748,6 +753,7 @@ export default function AnnotatePage() {
             }
           }}
           onKeypointDraftChange={setKeypointDraftCount}
+          boxRotationEnabled={boxRotationEnabled}
         />
 
         {/* Floating info card — portalled into the OL overlay. Mode-driven:
