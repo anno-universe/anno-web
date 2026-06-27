@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
 import { createPortal } from "react-dom";
 import { Pencil, Tag, Trash2 } from "lucide-react";
 import { getProject } from "@/api/projects";
@@ -29,6 +29,7 @@ import {
   upgradeMetaInfoConfig,
 } from "@/lib/project/configVersion";
 import { labelOptionsFromMapping } from "@/lib/utils/labelMapping";
+import { useSetBreadcrumb } from "@/lib/breadcrumb";
 import type {
   Annotation2DOutput,
   Annotation2DCreateInput,
@@ -254,6 +255,10 @@ export default function AnnotatePage() {
   useEffect(() => {
     loadAll();
   }, [pid, iid]);
+
+  // Register project name + image filename as dynamic breadcrumb segments.
+  useSetBreadcrumb("project", project?.name ?? null);
+  useSetBreadcrumb("image", image?.file_name ?? null);
 
   async function refreshOperations() {
     try {
@@ -661,24 +666,10 @@ export default function AnnotatePage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] flex-col">
-      {/* Top bar */}
+    <div className="flex h-[calc(100vh-5rem)] flex-col">
+      {/* Top bar — image info + error dismiss */}
       <div className="flex h-10 shrink-0 items-center justify-between border-b bg-card px-3">
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <Link
-            to={`/projects/${pid}`}
-            className="text-muted-foreground hover:text-foreground hover:underline transition-colors"
-          >
-            {project?.name ?? `Project #${pid}`}
-          </Link>
-          <span>/</span>
-          <Link
-            to={`/projects/${pid}/images`}
-            className="text-muted-foreground hover:text-foreground hover:underline transition-colors"
-          >
-            Images
-          </Link>
-          <span>/</span>
           <span className="font-medium text-foreground">
             {image.file_name}
           </span>

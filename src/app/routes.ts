@@ -57,10 +57,12 @@ export const router = createBrowserRouter([
       {
         path: "projects",
         Component: ProjectsPage,
+        handle: { breadcrumb: "Projects" } as any,
       },
       {
         path: "projects/:projectId",
         Component: ProjectLayout,
+        handle: { dynamicKey: "project" } as any,
         children: [
           {
             index: true,
@@ -69,24 +71,29 @@ export const router = createBrowserRouter([
           {
             path: "upload",
             Component: UploadPage,
+            handle: { breadcrumb: "Upload" } as any,
           },
           {
             path: "images",
             Component: ImagesPage,
+            handle: { breadcrumb: "Images" } as any,
           },
           {
             path: "settings",
             Component: ProjectSettingsPage,
+            handle: { breadcrumb: "Settings" } as any,
           },
           {
             path: "members",
             Component: ProjectMembersPage,
+            handle: { breadcrumb: "Members" } as any,
           },
         ],
       },
       {
         path: "projects/:projectId/images/:imageId/annotate",
         Component: AnnotatePage,
+        handle: { dynamicKey: "image" } as any,
       },
     ],
   },

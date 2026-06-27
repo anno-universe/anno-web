@@ -4,6 +4,7 @@ import { getProject } from "@/api/projects";
 import { ProjectRoleBadge } from "@/components/project/ProjectRoleBadge";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
+import { useSetBreadcrumb } from "@/lib/breadcrumb";
 import type { ProjectOutput } from "@/types/project";
 
 export interface ProjectContext {
@@ -41,6 +42,9 @@ export default function ProjectLayout() {
   useEffect(() => {
     fetchProject();
   }, [fetchProject]);
+
+  // Register project name as a dynamic breadcrumb segment.
+  useSetBreadcrumb("project", project?.name ?? null);
 
   // Only render Outlet when we have project data — children receive guaranteed project
   if (loading) {
