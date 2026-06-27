@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "openlayer": {
+      "source": "membranedev/application-skills",
+      "sourceType": "github",
+      "skillPath": "skills/openlayer/SKILL.md",
+      "computedHash": "eb93d692c80779d520bcd2fb437f8e776821f580fe19a5a50472200a7bd2c574"
+    }
+  }
+}
