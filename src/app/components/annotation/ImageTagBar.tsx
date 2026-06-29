@@ -9,6 +9,28 @@ interface Props {
   onApplyTag: (tagId: number) => void;
   onRemoveTag: (tagId: number) => void;
   disabled?: boolean;
+  /** Current user ID — used to enforce "workers can only remove own tags" */
+  currentUserId?: number | null;
+  /** Current user's project role */
+  userRole?: string | null;
+}
+
+/**
+ * Does the current user have permission to remove this tag?
+ *
+ * Backend rule (ImageTagController.remove):
+ * - Admins and supervisors can remove any tag
+ * - Workers can only remove tags they themselves applied
+ */
+function canRemoveTag(
+  tag: ImageTagOutput,
+  userRole?: string | null,
+  currentUserId?: number | null,
+): boolean {
+  const role = (userRole ?? "").toLowerCase();
+  if (role === "admin" || role === "supervisor") return true;
+  if (role === "worker") return tag.applied_by_id === currentUserId;
+  return false;
 }
 
 /**
@@ -22,6 +44,8 @@ export function ImageTagBar({
   onApplyTag,
   onRemoveTag,
   disabled = false,
+  currentUserId,
+  userRole,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -29,7 +53,9 @@ export function ImageTagBar({
 
   return (
     <div className="relative flex items-center gap-1.5">
-      {imageTags.map((t) => (
+      {imageTags.map((t) => {
+        const canRemove = canRemoveTag(t, userRole, currentUserId);
+        return (
         <span
           key={t.id}
           className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium leading-tight"
@@ -38,12 +64,16 @@ export function ImageTagBar({
             backgroundColor: `${t.tag_color}18`,
             color: t.tag_color,
           }}
-          title={t.note || t.tag_display_name || t.tag_name}
+          title={
+            t.note
+              ? `${t.tag_display_name || t.tag_name}: ${t.note}`
+              : t.tag_display_name || t.tag_name
+          }
         >
           <span className="max-w-[100px] truncate">
             {t.tag_display_name || t.tag_name}
           </span>
-          {!disabled && (
+          {!disabled && canRemove && (
             <button
               type="button"
               onClick={() => onRemoveTag(t.tag_id)}
@@ -54,7 +84,8 @@ export function ImageTagBar({
             </button>
           )}
         </span>
-      ))}
+        );
+      })}
 
       {!disabled && (
         <button

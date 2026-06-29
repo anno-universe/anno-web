@@ -27,6 +27,7 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { AnnotationTopToolBar } from "@/components/annotation/AnnotationTopToolBar";
+import { useAuthStore } from "@/stores/authStore";
 import type { ContextMenuAction } from "@/components/annotation/ContextMenu";
 import type { InfoCardMode } from "@/components/annotation/AnnotationInfoCard";
 import type { AnnotationMapHandle } from "@/components/annotation/AnnotationMap";
@@ -51,6 +52,7 @@ export default function AnnotatePage() {
   const { projectId, imageId } = useParams();
   const pid = Number(projectId);
   const iid = Number(imageId);
+  const user = useAuthStore((s) => s.user);
 
   // Data
   const [project, setProject] = useState<ProjectOutput | null>(null);
@@ -780,6 +782,8 @@ export default function AnnotatePage() {
         projectTags={projectTags}
         onApplyTag={handleApplyTag}
         onRemoveTag={handleRemoveTag}
+        currentUserId={user?.id}
+        userRole={project?.my_role}
         error={displayError || undefined}
         onDismissError={() => {
           setError("");

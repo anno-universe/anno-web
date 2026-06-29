@@ -13,6 +13,10 @@ interface AnnotationTopToolBarProps {
   projectTags: TagOutput[];
   onApplyTag: (tagId: number) => void;
   onRemoveTag: (tagId: number) => void;
+  /** Current user ID — for tag removal ownership check */
+  currentUserId?: number | null;
+  /** Current user's project role — for tag removal ownership check */
+  userRole?: string | null;
   error?: string;
   onDismissError: () => void;
 }
@@ -32,6 +36,8 @@ export function AnnotationTopToolBar({
   projectTags,
   onApplyTag,
   onRemoveTag,
+  currentUserId,
+  userRole,
   error,
   onDismissError,
 }: AnnotationTopToolBarProps) {
@@ -75,6 +81,8 @@ export function AnnotationTopToolBar({
           projectTags={projectTags}
           onApplyTag={onApplyTag}
           onRemoveTag={onRemoveTag}
+          currentUserId={currentUserId}
+          userRole={userRole}
         />
         {error && (
           <button
