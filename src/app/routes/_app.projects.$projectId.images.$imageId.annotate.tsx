@@ -11,6 +11,12 @@ import {
   deleteAnnotation,
 } from "@/api/annotations";
 import { getOperations } from "@/api/operations";
+import {
+  getProjectTags,
+  getImageTags,
+  applyImageTag,
+  removeImageTag,
+} from "@/api/tags";
 import { AnnotationMap } from "@/components/annotation/AnnotationMap";
 import { AnnotationToolbar } from "@/components/annotation/AnnotationToolbar";
 import { AnnotationSidePanel } from "@/components/annotation/AnnotationSidePanel";
@@ -20,6 +26,7 @@ import { StatusBar } from "@/components/annotation/StatusBar";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { ImageTagBar } from "@/components/annotation/ImageTagBar";
 import type { ContextMenuAction } from "@/components/annotation/ContextMenu";
 import type { InfoCardMode } from "@/components/annotation/AnnotationInfoCard";
 import type { AnnotationMapHandle } from "@/components/annotation/AnnotationMap";
@@ -37,6 +44,7 @@ import type {
 import type { OperationOutput } from "@/types/operation";
 import type { ProjectOutput } from "@/types/project";
 import type { Image2DOutput } from "@/types/image";
+import type { TagOutput, ImageTagOutput } from "@/types/tag";
 import type { ToolType } from "@/components/annotation/StatusBar";
 
 export default function AnnotatePage() {
@@ -49,6 +57,8 @@ export default function AnnotatePage() {
   const [image, setImage] = useState<Image2DOutput | null>(null);
   const [annotations, setAnnotations] = useState<Annotation2DOutput[]>([]);
   const [operations, setOperations] = useState<OperationOutput[]>([]);
+  const [projectTags, setProjectTags] = useState<TagOutput[]>([]);
+  const [imageTags, setImageTags] = useState<ImageTagOutput[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -249,6 +259,22 @@ export default function AnnotatePage() {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
       setLoading(false);
+    }
+
+    // Tags — fetched separately so failures don't block the main page
+    loadTags();
+  }
+
+  async function loadTags() {
+    try {
+      const [ptags, itags] = await Promise.all([
+        getProjectTags(pid, { limit: 200, is_active: true }),
+        getImageTags(pid, iid),
+      ]);
+      setProjectTags(ptags.items);
+      setImageTags(itags);
+    } catch {
+      // non-blocking — tag bar just stays empty
     }
   }
 
@@ -476,6 +502,32 @@ export default function AnnotatePage() {
     [pid, iid, select]
   );
 
+  // ---- Tag handlers ----
+
+  const handleApplyTag = useCallback(
+    async (tagId: number) => {
+      try {
+        const applied = await applyImageTag(pid, iid, { tag_id: tagId });
+        setImageTags((prev) => [...prev, applied]);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to apply tag");
+      }
+    },
+    [pid, iid]
+  );
+
+  const handleRemoveTag = useCallback(
+    async (tagId: number) => {
+      try {
+        await removeImageTag(pid, iid, tagId);
+        setImageTags((prev) => prev.filter((t) => t.tag_id !== tagId));
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to remove tag");
+      }
+    },
+    [pid, iid]
+  );
+
   // ---- Context menu ----
   const handleAnnotationContextMenu = useCallback(
     (annotationId: number, screenX: number, screenY: number) => {
@@ -667,7 +719,7 @@ export default function AnnotatePage() {
 
   return (
     <div className="flex h-[calc(100vh-5rem)] flex-col">
-      {/* Top bar — image info + error dismiss */}
+      {/* Top bar — image info + tags + error dismiss */}
       <div className="flex h-10 shrink-0 items-center justify-between border-b bg-card px-3">
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">
@@ -678,6 +730,12 @@ export default function AnnotatePage() {
           </span>
         </div>
         <div className="flex items-center gap-3">
+          <ImageTagBar
+            imageTags={imageTags}
+            projectTags={projectTags}
+            onApplyTag={handleApplyTag}
+            onRemoveTag={handleRemoveTag}
+          />
           {displayError && (
             <button
               onClick={() => {

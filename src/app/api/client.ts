@@ -4,11 +4,35 @@ import type { TokenRefreshOutput } from "@/types/auth";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
+/**
+ * Custom param serializer: arrays become repeated keys (tag=a&tag=b),
+ * matching Django's `request.GET.getlist('tag')` convention.
+ */
+function paramsSerializer(params: Record<string, unknown>): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(params)) {
+    if (value == null) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        parts.push(
+          `${encodeURIComponent(key)}=${encodeURIComponent(String(item))}`
+        );
+      }
+    } else {
+      parts.push(
+        `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`
+      );
+    }
+  }
+  return parts.join("&");
+}
+
 export const api = axios.create({
   baseURL: BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
+  paramsSerializer,
 });
 
 // ---- Refresh queue ----

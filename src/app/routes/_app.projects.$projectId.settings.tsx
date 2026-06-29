@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useParams, useOutletContext, useNavigate } from "react-router";
 import { updateProject, deleteProject } from "@/api/projects";
+import { getProjectTags } from "@/api/tags";
 import { LabelMappingEditor } from "@/components/project/LabelMappingEditor";
 import { AnnotationSettings } from "@/components/project/AnnotationSettings";
+import { TagManager } from "@/components/project/TagManager";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
@@ -14,6 +16,7 @@ import {
   type MetaInfoConfigV2,
 } from "@/lib/project/configVersion";
 import type { ProjectUpdateInput } from "@/types/project";
+import type { TagOutput } from "@/types/tag";
 import type { ProjectContext } from "./_app.projects.$projectId";
 
 export default function ProjectSettingsPage() {
@@ -37,6 +40,25 @@ export default function ProjectSettingsPage() {
   const [labelMapping, setLabelMapping] = useState<LabelMappingConfigV2>(
     upgradeLabelMappingConfig(project.label_mapping as Record<string, unknown>)
   );
+
+  // Tag state — fetched separately (tags are independent REST resources)
+  const [projectTags, setProjectTags] = useState<TagOutput[]>([]);
+  const [loadingTags, setLoadingTags] = useState(true);
+
+  async function loadTags() {
+    try {
+      const resp = await getProjectTags(id, { limit: 500 });
+      setProjectTags(resp.items);
+    } catch {
+      // non-blocking
+    } finally {
+      setLoadingTags(false);
+    }
+  }
+
+  useEffect(() => {
+    loadTags();
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-upgrade legacy config on mount
   useEffect(() => {
@@ -182,6 +204,24 @@ export default function ProjectSettingsPage() {
             onChange={setMetaInfo}
             disabled={!isSupervisor}
           />
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-foreground">Tags</p>
+          <p className="text-xs text-muted-foreground">
+            Define tags that can be applied to images to track annotation
+            progress.
+          </p>
+          {loadingTags ? (
+            <LoadingSpinner />
+          ) : (
+            <TagManager
+              projectId={id}
+              tags={projectTags}
+              onTagsChanged={loadTags}
+              disabled={!isSupervisor}
+            />
+          )}
         </div>
 
         {isSupervisor && (

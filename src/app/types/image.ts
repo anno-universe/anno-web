@@ -1,3 +1,5 @@
+import type { ImageTagOutput } from "./tag";
+
 export interface Image2DOutput {
   id: number;
   project_id: number;
@@ -7,6 +9,7 @@ export interface Image2DOutput {
   width: number | null;
   height: number | null;
   annotation_count: number;
+  tags: ImageTagOutput[];
   created_at: string;
   updated_at: string;
 }

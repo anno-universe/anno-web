@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useParams, useOutletContext, useNavigate } from "react-router";
 import { getImages } from "@/api/images";
+import { getProjectTags } from "@/api/tags";
 import { AuthenticatedImage } from "@/components/image/AuthenticatedImage";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
@@ -13,6 +14,7 @@ import {
 import { getThumbnailUrl } from "@/api/images";
 import { Upload } from "lucide-react";
 import type { Image2DOutput } from "@/types/image";
+import type { TagOutput } from "@/types/tag";
 import type { ProjectContext } from "./_app.projects.$projectId";
 
 const DEFAULT_LIMIT = 20;
@@ -64,6 +66,31 @@ function imageColumns(
       ),
     },
     {
+      key: "tags",
+      header: "Tags",
+      className: "w-44",
+      render: (img) =>
+        img.tags && img.tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {img.tags.map((t) => (
+              <span
+                key={t.id}
+                className="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-tight"
+                style={{
+                  borderColor: t.tag_color,
+                  backgroundColor: `${t.tag_color}18`,
+                  color: t.tag_color,
+                }}
+              >
+                {t.tag_display_name || t.tag_name}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        ),
+    },
+    {
       key: "actions",
       header: "",
       className: "w-24",
@@ -94,6 +121,8 @@ export default function ImagesPage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [projectTags, setProjectTags] = useState<TagOutput[]>([]);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
@@ -104,11 +133,13 @@ export default function ImagesPage() {
     [navigate, pid],
   );
 
-  async function fetchImages(limit: number, offset: number) {
+  async function fetchImages(limit: number, offset: number, tags?: string[]) {
     setLoading(true);
     setError("");
     try {
-      const imageData = await getImages(pid, { limit, offset });
+      const params: Record<string, unknown> = { limit, offset };
+      if (tags && tags.length > 0) params.tag = tags;
+      const imageData = await getImages(pid, params);
       setImages(imageData.items);
       setPagination({
         count: imageData.count,
@@ -123,11 +154,18 @@ export default function ImagesPage() {
   }
 
   useEffect(() => {
-    fetchImages(DEFAULT_LIMIT, 0);
+    fetchImages(DEFAULT_LIMIT, 0, tagFilter);
+  }, [pid, tagFilter]);
+
+  // Fetch project tags for the filter dropdown
+  useEffect(() => {
+    getProjectTags(pid, { limit: 200, is_active: true })
+      .then((resp) => setProjectTags(resp.items))
+      .catch(() => {});
   }, [pid]);
 
   function handlePageChange(offset: number, limit: number) {
-    fetchImages(limit, offset);
+    fetchImages(limit, offset, tagFilter.length > 0 ? tagFilter : undefined);
   }
 
   if (loading && images.length === 0) {
@@ -142,13 +180,59 @@ export default function ImagesPage() {
     return (
       <ErrorAlert
         message={error}
-        onRetry={() => fetchImages(pagination.limit, pagination.offset)}
+        onRetry={() => fetchImages(pagination.limit, pagination.offset, tagFilter.length > 0 ? tagFilter : undefined)}
       />
     );
   }
 
   return (
     <div>
+      {/* Tag filter — multi-select toggle chips */}
+      {projectTags.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground mr-1">
+            Filter by tag:
+          </span>
+          {projectTags.map((tag) => {
+            const selected = tagFilter.includes(tag.name);
+            return (
+              <button
+                key={tag.id}
+                type="button"
+                onClick={() =>
+                  setTagFilter((prev) =>
+                    selected
+                      ? prev.filter((n) => n !== tag.name)
+                      : [...prev, tag.name]
+                  )
+                }
+                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                  selected
+                    ? "border-transparent text-white"
+                    : "border-input bg-background text-muted-foreground hover:border-foreground hover:text-foreground"
+                }`}
+                style={
+                  selected
+                    ? { backgroundColor: tag.color, borderColor: tag.color }
+                    : undefined
+                }
+              >
+                {tag.display_name || tag.name}
+              </button>
+            );
+          })}
+          {tagFilter.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setTagFilter([])}
+              className="text-xs text-muted-foreground hover:text-foreground hover:underline ml-1"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           {pagination.count} {pagination.count === 1 ? "image" : "images"}
