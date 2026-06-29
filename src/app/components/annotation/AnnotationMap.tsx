@@ -681,8 +681,8 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         view: new View({
           center: [width / 2, height / 2],
           zoom: 1,
-          maxZoom: 20,
-          minZoom: 0.1,
+          maxZoom: 24,
+          minZoom: 14,
           extent: [-width * 2, -height * 2, width * 3, height * 3],
         }),
         controls: [],

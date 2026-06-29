@@ -97,6 +97,22 @@ export default function UploadPage() {
   const [batchComplete, setBatchComplete] = useState(false);
   const abortRef = useRef(false);
 
+  // ---- pagination ----
+  const DEFAULT_PAGE_SIZE = 20;
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [currentOffset, setCurrentOffset] = useState(0);
+
+  // Clamp offset when files change (add/remove/clear)
+  useEffect(() => {
+    setCurrentOffset((prev) => {
+      if (files.length === 0) return 0;
+      const maxOffset = Math.max(0, Math.ceil(files.length / pageSize) - 1) * pageSize;
+      if (prev > maxOffset) return maxOffset;
+      // If prev fits within current pageSize but may need adjustment due to pageSize change
+      return prev - (prev % pageSize);
+    });
+  }, [files.length, pageSize]);
+
   // Cleanup abort on unmount
   useEffect(() => {
     return () => {
@@ -193,6 +209,19 @@ export default function UploadPage() {
   const hasFiles = files.length > 0;
   const canUpload = pendingCount > 0 && !uploading;
 
+  // ---- pagination derived ----
+  const totalPages = Math.max(1, Math.ceil(files.length / pageSize));
+  const currentPage = Math.floor(currentOffset / pageSize) + 1;
+  const paginatedFiles = files.slice(currentOffset, currentOffset + pageSize);
+  const showPagination = files.length > pageSize;
+  const pageStart = files.length === 0 ? 0 : currentOffset + 1;
+  const pageEnd = Math.min(currentOffset + pageSize, files.length);
+
+  function goToPage(page: number) {
+    const newOffset = (page - 1) * pageSize;
+    setCurrentOffset(Math.max(0, Math.min(newOffset, files.length - 1)));
+  }
+
   // ---- worker gate ----
 
   if (!isSupervisor) {
@@ -246,7 +275,7 @@ export default function UploadPage() {
       {/* File list */}
       {hasFiles && (
         <div className="mt-4 space-y-2">
-          {files.map((entry) => (
+          {paginatedFiles.map((entry) => (
             <div
               key={entry.id}
               className={`flex items-center gap-3 rounded-md border bg-card p-3 ${
@@ -282,6 +311,53 @@ export default function UploadPage() {
                 )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Pagination controls */}
+      {showPagination && (
+        <div className="mt-3 flex items-center justify-between rounded-lg border bg-card px-4 py-3">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span>
+              Showing {pageStart}–{pageEnd} of {files.length}
+            </span>
+            <label className="flex items-center gap-1">
+              <span>Rows:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentOffset(0);
+                }}
+                className="rounded border bg-background px-1.5 py-0.5 text-xs"
+              >
+                {[10, 20, 50, 100].map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={currentPage <= 1}
+              className="rounded border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="px-2 text-xs text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+              className="rounded border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
 
