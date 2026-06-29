@@ -26,7 +26,7 @@ export function AnnotationSettings({ value, onChange, disabled }: Props) {
     value.box_rotation_enabled === true;
 
   const keypointEnabled =
-    value.keypoint_enabled !== false; // default on
+    value.keypoint_enabled === true; // default off
 
   return (
     <div className="space-y-4">

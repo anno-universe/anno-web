@@ -650,7 +650,7 @@ export default function AnnotatePage() {
   const metaInfo = upgradeMetaInfoConfig(
     project?.meta_info as Record<string, unknown>
   );
-  const keypointEnabled = metaInfo.keypoint_enabled !== false;
+  const keypointEnabled = metaInfo.keypoint_enabled === true;
   const boxRotationEnabled = metaInfo.box_rotation_enabled === true;
 
   // Selected annotation for the info card
