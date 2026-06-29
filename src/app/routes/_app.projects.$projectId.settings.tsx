@@ -1,10 +1,18 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useParams, useOutletContext, useNavigate } from "react-router";
 import { updateProject, deleteProject } from "@/api/projects";
-import { getProjectTags } from "@/api/tags";
+import {
+  getProjectTags,
+  createTag,
+  updateTag,
+  deleteTag,
+} from "@/api/tags";
 import { LabelMappingEditor } from "@/components/project/LabelMappingEditor";
 import { AnnotationSettings } from "@/components/project/AnnotationSettings";
-import { TagManager } from "@/components/project/TagManager";
+import {
+  TagManager,
+  type TagManagerHandle,
+} from "@/components/project/TagManager";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
@@ -42,6 +50,7 @@ export default function ProjectSettingsPage() {
   );
 
   // Tag state — fetched separately (tags are independent REST resources)
+  const tagManagerRef = useRef<TagManagerHandle>(null);
   const [projectTags, setProjectTags] = useState<TagOutput[]>([]);
   const [loadingTags, setLoadingTags] = useState(true);
 
@@ -87,6 +96,13 @@ export default function ProjectSettingsPage() {
     setSuccessMsg("");
     setError("");
 
+    const tagChanges = tagManagerRef.current?.collectChanges();
+    const tagOpsPending =
+      tagChanges &&
+      (tagChanges.creates.length > 0 ||
+        tagChanges.updates.length > 0 ||
+        tagChanges.deletes.length > 0);
+
     const patch: ProjectUpdateInput = {};
     if (name !== project.name) patch.name = name;
     if (description !== (project.description ?? ""))
@@ -101,15 +117,31 @@ export default function ProjectSettingsPage() {
     )
       patch.label_mapping = labelMapping;
 
-    if (Object.keys(patch).length === 0) {
+    const projectChanged = Object.keys(patch).length > 0;
+
+    if (!projectChanged && !tagOpsPending) {
       setSuccessMsg("No changes to save.");
       return;
     }
 
     setSaving(true);
     try {
-      await updateProject(id, patch);
-      refreshProject();
+      // Save project fields (if changed)
+      if (projectChanged) {
+        await updateProject(id, patch);
+        refreshProject();
+      }
+
+      // Save tags (creates / updates / deletes)
+      if (tagOpsPending && tagChanges) {
+        await Promise.all([
+          ...tagChanges.creates.map((c) => createTag(id, c)),
+          ...tagChanges.updates.map((u) => updateTag(id, u.id, u.patch)),
+          ...tagChanges.deletes.map((d) => deleteTag(id, d)),
+        ]);
+        loadTags();
+      }
+
       setSuccessMsg("Saved.");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -216,9 +248,8 @@ export default function ProjectSettingsPage() {
             <LoadingSpinner />
           ) : (
             <TagManager
-              projectId={id}
+              ref={tagManagerRef}
               tags={projectTags}
-              onTagsChanged={loadTags}
               disabled={!isSupervisor}
             />
           )}
