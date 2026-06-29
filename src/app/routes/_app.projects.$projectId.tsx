@@ -118,6 +118,15 @@ export default function ProjectLayout() {
             Members
           </NavLink>
         )}
+        {isSupervisor && (
+          <NavLink
+            to={`/projects/${id}/developer`}
+            end
+            className={tabClassName}
+          >
+            Developer
+          </NavLink>
+        )}
         <NavLink
           to={`/projects/${id}/settings`}
           end

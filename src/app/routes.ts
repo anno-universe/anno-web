@@ -22,6 +22,9 @@ const ProjectSettingsPage = lazy(
 const ProjectMembersPage = lazy(
   () => import("@/routes/_app.projects.$projectId.members")
 );
+const ProjectDeveloperPage = lazy(
+  () => import("@/routes/_app.projects.$projectId.developer")
+);
 const UploadPage = lazy(
   () => import("@/routes/_app.projects.$projectId.upload")
 );
@@ -87,6 +90,11 @@ export const router = createBrowserRouter([
             path: "members",
             Component: ProjectMembersPage,
             handle: { breadcrumb: "Members" } as any,
+          },
+          {
+            path: "developer",
+            Component: ProjectDeveloperPage,
+            handle: { breadcrumb: "Developer" } as any,
           },
         ],
       },
