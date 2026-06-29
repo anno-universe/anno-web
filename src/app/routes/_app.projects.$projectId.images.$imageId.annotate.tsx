@@ -1,9 +1,9 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { useParams } from "react-router";
+import { useParams, useNavigate } from "react-router";
 import { createPortal } from "react-dom";
 import { Pencil, Tag, Trash2 } from "lucide-react";
 import { getProject } from "@/api/projects";
-import { getImage, getOriginalImageUrl } from "@/api/images";
+import { getImage, getImages, getOriginalImageUrl } from "@/api/images";
 import {
   getAnnotations,
   createAnnotation,
@@ -26,7 +26,7 @@ import { StatusBar } from "@/components/annotation/StatusBar";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { ImageTagBar } from "@/components/annotation/ImageTagBar";
+import { AnnotationTopToolBar } from "@/components/annotation/AnnotationTopToolBar";
 import type { ContextMenuAction } from "@/components/annotation/ContextMenu";
 import type { InfoCardMode } from "@/components/annotation/AnnotationInfoCard";
 import type { AnnotationMapHandle } from "@/components/annotation/AnnotationMap";
@@ -61,6 +61,11 @@ export default function AnnotatePage() {
   const [imageTags, setImageTags] = useState<ImageTagOutput[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Image list for prev/next navigation
+  const [imageList, setImageList] = useState<Image2DOutput[]>([]);
+  const [imageListLoading, setImageListLoading] = useState(false);
+  const navigate = useNavigate();
 
   // ---- Annotation state machine ----
   const {
@@ -282,9 +287,55 @@ export default function AnnotatePage() {
     loadAll();
   }, [pid, iid]);
 
+  // Fetch image list for prev/next navigation (non-blocking)
+  useEffect(() => {
+    let cancelled = false;
+    setImageListLoading(true);
+    getImages(pid, { limit: 500 })
+      .then((resp) => {
+        if (!cancelled) setImageList(resp.items);
+      })
+      .catch(() => {
+        // non-blocking — prev/next buttons stay disabled
+      })
+      .finally(() => {
+        if (!cancelled) setImageListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pid]);
+
+  // Reset annotation state when switching images
+  useEffect(() => {
+    mapRef.current?.cancelEdit();
+    mapRef.current?.clearDraft();
+    const s = stateRef.current;
+    if (s.type === "drafting") discardDraftDispatch();
+    if (s.type === "editing") cancelEditDispatch();
+    select(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [iid]);
+
   // Register project name + image filename as dynamic breadcrumb segments.
   useSetBreadcrumb("project", project?.name ?? null);
   useSetBreadcrumb("image", image?.file_name ?? null);
+
+  // Prev/next image navigation
+  const imageIndex = imageList.findIndex((img) => img.id === iid);
+  const prevImageId =
+    imageIndex > 0 ? imageList[imageIndex - 1].id : undefined;
+  const nextImageId =
+    imageIndex < imageList.length - 1
+      ? imageList[imageIndex + 1].id
+      : undefined;
+
+  const handleNavigate = useCallback(
+    (imageId: number) => {
+      navigate(`/projects/${pid}/images/${imageId}/annotate`);
+    },
+    [navigate, pid],
+  );
 
   async function refreshOperations() {
     try {
@@ -719,36 +770,22 @@ export default function AnnotatePage() {
 
   return (
     <div className="flex h-[calc(100vh-5rem)] flex-col">
-      {/* Top bar — image info + tags + error dismiss */}
-      <div className="flex h-10 shrink-0 items-center justify-between border-b bg-card px-3">
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">
-            {image.file_name}
-          </span>
-          <span className="text-muted-foreground">
-            ({image.width} × {image.height})
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <ImageTagBar
-            imageTags={imageTags}
-            projectTags={projectTags}
-            onApplyTag={handleApplyTag}
-            onRemoveTag={handleRemoveTag}
-          />
-          {displayError && (
-            <button
-              onClick={() => {
-                setError("");
-                clearError();
-              }}
-              className="text-xs text-destructive hover:underline"
-            >
-              {displayError} (dismiss)
-            </button>
-          )}
-        </div>
-      </div>
+      <AnnotationTopToolBar
+        image={image}
+        prevImageId={prevImageId}
+        nextImageId={nextImageId}
+        onNavigate={handleNavigate}
+        imagesLoading={imageListLoading}
+        imageTags={imageTags}
+        projectTags={projectTags}
+        onApplyTag={handleApplyTag}
+        onRemoveTag={handleRemoveTag}
+        error={displayError || undefined}
+        onDismissError={() => {
+          setError("");
+          clearError();
+        }}
+      />
 
       {/* Main area: Toolbar | Map | SidePanel */}
       <div className="flex flex-1 overflow-hidden">

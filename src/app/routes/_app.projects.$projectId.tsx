@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Outlet, useParams, NavLink } from "react-router";
+import { Outlet, useParams, NavLink, useLocation } from "react-router";
 import { getProject } from "@/api/projects";
 import { ProjectRoleBadge } from "@/components/project/ProjectRoleBadge";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -21,6 +21,7 @@ function tabClassName({ isActive }: { isActive: boolean }) {
 export default function ProjectLayout() {
   const { projectId } = useParams();
   const id = Number(projectId);
+  const location = useLocation();
 
   const [project, setProject] = useState<ProjectOutput | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,6 +75,15 @@ export default function ProjectLayout() {
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
   const isWorker = project.my_role?.toLowerCase() === "worker";
 
+  // Preserve images page search params so the tab link remembers pagination
+  const imagesSearch =
+    location.pathname === `/projects/${id}/images`
+      ? location.search // use current URL params when on the images page
+      : (() => {
+          const saved = sessionStorage.getItem(`images_search_${id}`);
+          return saved ? `?${saved}` : "";
+        })();
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       {/* Header */}
@@ -103,7 +113,7 @@ export default function ProjectLayout() {
       {/* Tab navigation */}
       <div className="flex gap-2 border-b pb-2 mb-6">
         <NavLink
-          to={`/projects/${id}/images`}
+          to={`/projects/${id}/images${imagesSearch}`}
           end
           className={tabClassName}
         >

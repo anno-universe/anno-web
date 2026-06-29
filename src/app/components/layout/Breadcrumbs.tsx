@@ -46,9 +46,14 @@ export function Breadcrumbs() {
         path: `/projects/${projectId}`,
         isLast: false,
       });
+      const savedSearch = sessionStorage.getItem(
+        `images_search_${projectId}`,
+      );
       items.push({
         label: "Images",
-        path: `/projects/${projectId}/images`,
+        path: savedSearch
+          ? `/projects/${projectId}/images?${savedSearch}`
+          : `/projects/${projectId}/images`,
         isLast: false,
       });
     }

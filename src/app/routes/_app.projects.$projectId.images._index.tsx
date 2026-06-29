@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link, useParams, useOutletContext, useNavigate } from "react-router";
+import { Link, useParams, useOutletContext, useNavigate, useSearchParams } from "react-router";
 import { getImages } from "@/api/images";
 import { getProjectTags } from "@/api/tags";
 import { AuthenticatedImage } from "@/components/image/AuthenticatedImage";
@@ -9,7 +9,6 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import {
   PaginatedTable,
   type Column,
-  type PaginationState,
 } from "@/components/shared/PaginatedTable";
 import { getThumbnailUrl } from "@/api/images";
 import { Upload } from "lucide-react";
@@ -114,15 +113,23 @@ export default function ImagesPage() {
   const { project } = useOutletContext<ProjectContext>();
 
   const [images, setImages] = useState<Image2DOutput[]>([]);
-  const [pagination, setPagination] = useState<PaginationState>({
-    count: 0,
-    limit: DEFAULT_LIMIT,
-    offset: 0,
-  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [projectTags, setProjectTags] = useState<TagOutput[]>([]);
-  const [tagFilter, setTagFilter] = useState<string[]>([]);
+
+  // Derive pagination + tag filter from URL search params
+  const [searchParams, setSearchParams] = useSearchParams();
+  const offset =
+    parseInt(searchParams.get("offset") || "0", 10) || 0;
+  const limit =
+    parseInt(searchParams.get("limit") || String(DEFAULT_LIMIT), 10) ||
+    DEFAULT_LIMIT;
+  const tagFilter = searchParams.getAll("tag");
+
+  // Server-provided pagination metadata (count comes from API)
+  const [count, setCount] = useState(0);
+  const [serverLimit, setServerLimit] = useState(limit);
+  const [serverOffset, setServerOffset] = useState(offset);
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
@@ -133,19 +140,24 @@ export default function ImagesPage() {
     [navigate, pid],
   );
 
-  async function fetchImages(limit: number, offset: number, tags?: string[]) {
+  async function fetchImages(
+    fetchLimit: number,
+    fetchOffset: number,
+    tags?: string[],
+  ) {
     setLoading(true);
     setError("");
     try {
-      const params: Record<string, unknown> = { limit, offset };
+      const params: Record<string, unknown> = {
+        limit: fetchLimit,
+        offset: fetchOffset,
+      };
       if (tags && tags.length > 0) params.tag = tags;
       const imageData = await getImages(pid, params);
       setImages(imageData.items);
-      setPagination({
-        count: imageData.count,
-        limit: imageData.limit,
-        offset: imageData.offset,
-      });
+      setCount(imageData.count);
+      setServerLimit(imageData.limit);
+      setServerOffset(imageData.offset);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load images");
     } finally {
@@ -154,8 +166,18 @@ export default function ImagesPage() {
   }
 
   useEffect(() => {
-    fetchImages(DEFAULT_LIMIT, 0, tagFilter);
-  }, [pid, tagFilter]);
+    fetchImages(limit, offset, tagFilter.length > 0 ? tagFilter : undefined);
+  }, [pid, offset, limit, tagFilter.join(",")]);
+
+  // Persist search params so the breadcrumb "Images" link can restore them
+  useEffect(() => {
+    const qs = searchParams.toString();
+    if (qs) {
+      sessionStorage.setItem(`images_search_${pid}`, qs);
+    } else {
+      sessionStorage.removeItem(`images_search_${pid}`);
+    }
+  }, [pid, searchParams]);
 
   // Fetch project tags for the filter dropdown
   useEffect(() => {
@@ -164,8 +186,16 @@ export default function ImagesPage() {
       .catch(() => {});
   }, [pid]);
 
-  function handlePageChange(offset: number, limit: number) {
-    fetchImages(limit, offset, tagFilter.length > 0 ? tagFilter : undefined);
+  function handlePageChange(newOffset: number, newLimit: number) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("offset", String(newOffset));
+        next.set("limit", String(newLimit));
+        return next;
+      },
+      { replace: true },
+    );
   }
 
   if (loading && images.length === 0) {
@@ -180,7 +210,7 @@ export default function ImagesPage() {
     return (
       <ErrorAlert
         message={error}
-        onRetry={() => fetchImages(pagination.limit, pagination.offset, tagFilter.length > 0 ? tagFilter : undefined)}
+        onRetry={() => fetchImages(limit, offset, tagFilter.length > 0 ? tagFilter : undefined)}
       />
     );
   }
@@ -199,13 +229,27 @@ export default function ImagesPage() {
               <button
                 key={tag.id}
                 type="button"
-                onClick={() =>
-                  setTagFilter((prev) =>
-                    selected
-                      ? prev.filter((n) => n !== tag.name)
-                      : [...prev, tag.name]
-                  )
-                }
+                onClick={() => {
+                  setSearchParams(
+                    (prev) => {
+                      const next = new URLSearchParams(prev);
+                      const current = next.getAll("tag");
+                      next.delete("tag");
+                      if (selected) {
+                        current
+                          .filter((t) => t !== tag.name)
+                          .forEach((t) => next.append("tag", t));
+                      } else {
+                        [...current, tag.name].forEach((t) =>
+                          next.append("tag", t),
+                        );
+                      }
+                      next.delete("offset"); // reset to first page
+                      return next;
+                    },
+                    { replace: true },
+                  );
+                }}
                 className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
                   selected
                     ? "border-transparent text-white"
@@ -224,7 +268,17 @@ export default function ImagesPage() {
           {tagFilter.length > 0 && (
             <button
               type="button"
-              onClick={() => setTagFilter([])}
+              onClick={() => {
+                setSearchParams(
+                  (prev) => {
+                    const next = new URLSearchParams(prev);
+                    next.delete("tag");
+                    next.delete("offset");
+                    return next;
+                  },
+                  { replace: true },
+                );
+              }}
               className="text-xs text-muted-foreground hover:text-foreground hover:underline ml-1"
             >
               Clear
@@ -235,7 +289,7 @@ export default function ImagesPage() {
 
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {pagination.count} {pagination.count === 1 ? "image" : "images"}
+          {count} {count === 1 ? "image" : "images"}
         </p>
         {isSupervisor && (
           <Link
@@ -248,13 +302,13 @@ export default function ImagesPage() {
         )}
       </div>
 
-      {!loading && pagination.count === 0 ? (
+      {!loading && count === 0 ? (
         <EmptyState message="No images yet." />
       ) : (
         <PaginatedTable
           columns={imageColumns(pid, handleAnnotate)}
           rows={images}
-          pagination={pagination}
+          pagination={{ count, limit: serverLimit, offset: serverOffset }}
           onPageChange={handlePageChange}
           isLoading={loading}
           getRowKey={(img) => img.id}
