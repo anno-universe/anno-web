@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { InferenceToolbarSection } from "@/components/inference/InferenceToolbarSection";
 import type { ToolType } from "./StatusBar";
 
 interface Props {
@@ -30,6 +31,8 @@ interface Props {
   onCancelKeypoint?: () => void;
   /** Hide the keypoint tool button when project config disables it. */
   keypointEnabled?: boolean;
+  /** Callback to open the AI inference modal (only rendered on annotate page for supervisors). */
+  onOpenInference?: () => void;
 }
 
 function buildTools(keypointEnabled: boolean) {
@@ -64,6 +67,7 @@ export function AnnotationToolbar({
   onFinishKeypoint,
   onCancelKeypoint,
   keypointEnabled = true,
+  onOpenInference,
 }: Props) {
   const tools = buildTools(keypointEnabled);
 
@@ -109,6 +113,9 @@ export function AnnotationToolbar({
           <Icon className="h-[18px] w-[18px]" />
         </button>
       ))}
+
+      {/* Inference trigger (only on annotate page, supervisor only) */}
+      {onOpenInference && <InferenceToolbarSection onClick={onOpenInference} />}
 
       {/* Separator */}
       <div className="my-2 h-px w-8 bg-border" />

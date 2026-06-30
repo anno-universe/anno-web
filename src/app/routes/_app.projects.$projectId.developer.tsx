@@ -9,6 +9,8 @@ import {
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { Modal } from "@/components/shared/Modal";
+import { ProviderSection } from "@/components/inference/ProviderSection";
 import { useToastStore } from "@/stores/toastStore";
 import type { APIKeyOutput, APIKeyCreateInput } from "@/types/apiKey";
 import type { ProjectContext } from "./_app.projects.$projectId";
@@ -226,69 +228,72 @@ export default function ProjectDeveloperPage() {
         </button>
       </div>
 
-      {/* Create form */}
-      {showCreateForm && (
-        <div className="mb-6 rounded-md border p-4">
-          <h3 className="text-sm font-semibold text-foreground">
-            Create API Key
-          </h3>
-          <div className="mt-3 space-y-3">
-            <div className="space-y-1">
-              <label
-                htmlFor="keyName"
-                className="text-xs font-medium text-foreground"
-              >
-                Name
-              </label>
-              <input
-                id="keyName"
-                type="text"
-                value={newKeyName}
-                onChange={(e) => setNewKeyName(e.target.value)}
-                placeholder="e.g. inference-worker-1"
-                className="w-full rounded-md border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-            <div className="space-y-1">
-              <label
-                htmlFor="keyExpires"
-                className="text-xs font-medium text-foreground"
-              >
-                Expires (optional)
-              </label>
-              <input
-                id="keyExpires"
-                type="datetime-local"
-                value={newKeyExpires}
-                onChange={(e) => setNewKeyExpires(e.target.value)}
-                className="w-full max-w-xs rounded-md border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleCreate}
-                disabled={creating || !newKeyName.trim()}
-                className="flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {creating ? <LoadingSpinner /> : "Create"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCreateForm(false);
-                  setNewKeyName("");
-                  setNewKeyExpires("");
-                }}
-                disabled={creating}
-                className="rounded-md border px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            </div>
+      {/* Create modal */}
+      <Modal
+        open={showCreateForm}
+        title="Create API Key"
+        onClose={() => {
+          setShowCreateForm(false);
+          setNewKeyName("");
+          setNewKeyExpires("");
+        }}
+      >
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label
+              htmlFor="keyName"
+              className="text-xs font-medium text-foreground"
+            >
+              Name
+            </label>
+            <input
+              id="keyName"
+              type="text"
+              value={newKeyName}
+              onChange={(e) => setNewKeyName(e.target.value)}
+              placeholder="e.g. inference-worker-1"
+              className="w-full rounded-md border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-1">
+            <label
+              htmlFor="keyExpires"
+              className="text-xs font-medium text-foreground"
+            >
+              Expires (optional)
+            </label>
+            <input
+              id="keyExpires"
+              type="datetime-local"
+              value={newKeyExpires}
+              onChange={(e) => setNewKeyExpires(e.target.value)}
+              className="w-full max-w-xs rounded-md border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={creating || !newKeyName.trim()}
+              className="flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {creating ? <LoadingSpinner /> : "Create"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowCreateForm(false);
+                setNewKeyName("");
+                setNewKeyExpires("");
+              }}
+              disabled={creating}
+              className="rounded-md border px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-50"
+            >
+              Cancel
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Error */}
       {error && <ErrorAlert message={error} onRetry={fetchKeys} />}
@@ -460,33 +465,34 @@ export default function ProjectDeveloperPage() {
       )}
 
       {/* Token display modal — one-time display after creation */}
-      {createdToken && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-lg bg-background p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-foreground">
-              API Key Created
-            </h3>
-            <p className="mt-2 text-sm text-destructive font-medium">
-              Copy this key now. You won't be able to see it again.
-            </p>
-            <div className="mt-4 flex items-center gap-2">
-              <code className="flex-1 break-all rounded-md bg-muted px-3 py-2 text-xs font-mono text-foreground select-all">
-                {createdToken}
-              </code>
-              <CopyButton text={createdToken} />
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                onClick={closeTokenModal}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                Done
-              </button>
-            </div>
-          </div>
+      <Modal
+        open={createdToken !== null}
+        title="API Key Created"
+        size="lg"
+        onClose={closeTokenModal}
+      >
+        <p className="text-sm text-destructive font-medium">
+          Copy this key now. You won't be able to see it again.
+        </p>
+        <div className="mt-4 flex items-center gap-2">
+          <code className="flex-1 break-all rounded-md bg-muted px-3 py-2 text-xs font-mono text-foreground select-all">
+            {createdToken}
+          </code>
+          <CopyButton text={createdToken ?? ""} />
         </div>
-      )}
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={closeTokenModal}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Done
+          </button>
+        </div>
+      </Modal>
+
+      {/* Inference provider configuration */}
+      <ProviderSection projectId={id} isSupervisor={isSupervisor} />
 
       {/* Delete confirmation */}
       <ConfirmDialog

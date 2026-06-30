@@ -27,6 +27,7 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { AnnotationTopToolBar } from "@/components/annotation/AnnotationTopToolBar";
+import { InferenceModal } from "@/components/inference/InferenceModal";
 import { useAuthStore } from "@/stores/authStore";
 import type { ContextMenuAction } from "@/components/annotation/ContextMenu";
 import type { InfoCardMode } from "@/components/annotation/AnnotationInfoCard";
@@ -107,6 +108,9 @@ export default function AnnotatePage() {
 
   // Keypoint draft count (separate from annotation state — draw interaction)
   const [keypointDraftCount, setKeypointDraftCount] = useState(0);
+
+  // Inference modal
+  const [showInferenceModal, setShowInferenceModal] = useState(false);
 
   // Context menu
   const [ctxMenu, setCtxMenu] = useState<{
@@ -288,6 +292,20 @@ export default function AnnotatePage() {
   useEffect(() => {
     loadAll();
   }, [pid, iid]);
+
+  // ---- Inference completion handler ----
+  const handleInferenceComplete = useCallback(
+    async (annotationsCreated: number) => {
+      try {
+        const annResp = await getAnnotations(pid, iid, { limit: 500 });
+        setAnnotations(annResp.items);
+        refreshOperations();
+      } catch {
+        // non-blocking
+      }
+    },
+    [pid, iid]
+  );
 
   // Fetch image list for prev/next navigation (non-blocking)
   useEffect(() => {
@@ -811,6 +829,11 @@ export default function AnnotatePage() {
           onFinishKeypoint={() => mapRef.current?.finishKeypointGroup()}
           onCancelKeypoint={() => mapRef.current?.cancelKeypointGroup()}
           keypointEnabled={keypointEnabled}
+          onOpenInference={
+            project?.my_role != null
+              ? () => setShowInferenceModal(true)
+              : undefined
+          }
         />
 
         <AnnotationMap
@@ -929,6 +952,17 @@ export default function AnnotatePage() {
           setDeleteTargetId(null);
         }}
       />
+
+      {/* Inference modal — available to all project members */}
+      {project?.my_role != null && (
+        <InferenceModal
+          open={showInferenceModal}
+          projectId={pid}
+          imageId={iid}
+          onClose={() => setShowInferenceModal(false)}
+          onComplete={handleInferenceComplete}
+        />
+      )}
     </div>
   );
 }
