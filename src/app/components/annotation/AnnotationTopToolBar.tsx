@@ -58,7 +58,7 @@ export function AnnotationTopToolBar({
           <ChevronLeft className="h-4 w-4" />
         </button>
 
-        <span className="font-medium text-foreground">{image.file_name}</span>
+        <span className="font-medium text-foreground">{image.file_name}<span className="ml-1 text-muted-foreground tabular-nums">#{image.id}</span></span>
         {dimensions && (
           <span className="text-muted-foreground">{dimensions}</span>
         )}

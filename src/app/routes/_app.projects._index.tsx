@@ -25,7 +25,7 @@ const COLUMNS: Column<ProjectOutput>[] = [
         to={`/projects/${p.id}`}
         className="font-medium text-foreground hover:text-primary hover:underline"
       >
-        {p.name}
+        {p.name}<span className="ml-1 text-muted-foreground tabular-nums">#{p.id}</span>
       </Link>
     ),
   },

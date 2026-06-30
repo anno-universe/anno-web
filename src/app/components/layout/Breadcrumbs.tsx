@@ -40,7 +40,7 @@ export function Breadcrumbs() {
     const { projectId } = annotateMatch.params;
     if (projectId) {
       const projectLabel =
-        labels["project"] || `Project #${projectId}`;
+        labels["project"] || "Project";
       items.push({
         label: projectLabel,
         path: `/projects/${projectId}`,
@@ -78,9 +78,9 @@ export function Breadcrumbs() {
     } else if (handle?.breadcrumb) {
       label = handle.breadcrumb;
     } else if (handle?.dynamicKey === "project" && match.params.projectId) {
-      label = `Project #${match.params.projectId}`;
+      label = "Project";
     } else if (handle?.dynamicKey === "image" && match.params.imageId) {
-      label = `Image #${match.params.imageId}`;
+      label = "Image";
     } else {
       label = "...";
     }

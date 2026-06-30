@@ -45,7 +45,7 @@ function imageColumns(
           to={`/projects/${projectId}/images/${img.id}/annotate`}
           className="font-medium text-foreground hover:text-primary hover:underline"
         >
-          {img.file_name}
+          {img.file_name}<span className="ml-1 text-muted-foreground tabular-nums">#{img.id}</span>
         </Link>
       ),
     },

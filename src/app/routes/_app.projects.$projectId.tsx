@@ -90,7 +90,8 @@ export default function ProjectLayout() {
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-xl font-semibold text-foreground">
-            {project.name}
+            {project.name}{" "}
+            <span className="text-muted-foreground tabular-nums">#{project.id}</span>
           </h1>
           <div className="mt-1 flex items-center gap-2">
             <ProjectRoleBadge role={project.my_role} />
