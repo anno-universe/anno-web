@@ -12,10 +12,14 @@ import type {
   AnnotationType,
 } from "@/types/annotation";
 import { isBoxData, isPointsData } from "@/types/annotation";
+import { flipGeometryY } from "@/lib/annotation/imageProjection";
 
 // ---- Backend → OpenLayers ----
 
-export function annotationToFeature(ann: Annotation2DOutput): Feature {
+export function annotationToFeature(
+  ann: Annotation2DOutput,
+  imageHeight: number
+): Feature {
   let geometry;
 
   if (ann.annotation_type === "box" && isBoxData(ann.data)) {
@@ -32,6 +36,10 @@ export function annotationToFeature(ann: Annotation2DOutput): Feature {
     }
   }
 
+  // Converters build geometry in image-pixel space (y-down); flip into
+  // OpenLayers map space (y-up) before the feature goes on the map.
+  if (geometry) flipGeometryY(geometry, imageHeight);
+
   const feature = new Feature({ geometry });
   feature.setId(ann.id);
   feature.set("annotation_type", ann.annotation_type);
@@ -45,12 +53,17 @@ export function annotationToFeature(ann: Annotation2DOutput): Feature {
 export function featureToAnnotationInput(
   feature: Feature,
   annotationType: AnnotationType,
-  label: number | null
+  label: number | null,
+  imageHeight: number
 ): Annotation2DCreateInput {
-  const geometry = feature.getGeometry();
-  if (!geometry) {
+  const live = feature.getGeometry();
+  if (!live) {
     throw new Error("Feature has no geometry");
   }
+  // The on-map geometry is in OpenLayers map space (y-up); extract from a
+  // flipped clone so we emit image-pixel coords without mutating the feature.
+  const geometry = live.clone();
+  flipGeometryY(geometry, imageHeight);
 
   const base: Annotation2DCreateInput = {
     annotation_type: annotationType,

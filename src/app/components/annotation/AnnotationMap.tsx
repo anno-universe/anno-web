@@ -57,7 +57,7 @@ import {
   createPolygonEditInteraction,
   normalizeBoxTopEdge,
 } from "@/lib/annotation/mapInteractions";
-import { mapToImage } from "@/lib/annotation/imageProjection";
+import { mapToImage, flipGeometryY } from "@/lib/annotation/imageProjection";
 import type {
   Annotation2DOutput,
   Annotation2DCreateInput,
@@ -271,7 +271,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
             ? labelOverride
             : ((feature.get("label") ?? null) as number | null);
         try {
-          const input = featureToAnnotationInput(feature, type, label);
+          const input = featureToAnnotationInput(feature, type, label, height);
           onModifiedRef.current?.(id, input);
         } catch {
           /* invalid geometry — skip */
@@ -280,7 +280,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         editSnapshotRef.current = null;
         notifyDirty(false);
       },
-      [notifyDirty]
+      [notifyDirty, height]
     );
 
     /**
@@ -309,12 +309,18 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
           const type = feature.get("annotation_type");
           if (data) {
             try {
+              // _backendData holds image-pixel coords; flip into OL map space.
+              let geom;
               if (type === "box") {
-                feature.setGeometry(boxDataToGeometry(data));
+                geom = boxDataToGeometry(data);
               } else if (type === "polygon" && data.points) {
-                feature.setGeometry(polygonPointsToGeometry(data.points));
+                geom = polygonPointsToGeometry(data.points);
               } else if (type === "keypoint" && data.points) {
-                feature.setGeometry(keypointPointsToGeometry(data.points));
+                geom = keypointPointsToGeometry(data.points);
+              }
+              if (geom) {
+                flipGeometryY(geom, height);
+                feature.setGeometry(geom);
               }
             } catch {
               /* ignore */
@@ -326,7 +332,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         notifyDirty(false);
         feature.changed();
       },
-      [notifyDirty]
+      [notifyDirty, height]
     );
 
     // ---- Draft (awaiting-label) helpers ----
@@ -431,11 +437,11 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         const type = (feature.get("annotation_type") || "box") as AnnotationType;
         const label = (feature.get("label") ?? null) as number | null;
         try {
-          return featureToAnnotationInput(feature, type, label);
+          return featureToAnnotationInput(feature, type, label, height);
         } catch {
           return null;
         }
-      }, []);
+      }, [height]);
 
     // Put a freshly drawn shape on the map as a draft and ask the parent to
     // open the label chooser. Replaces any previous draft.
@@ -512,6 +518,8 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     const finishKeypointGroup = useCallback(() => {
       const pts = keypointDraftRef.current;
       if (pts.length >= 1) {
+        // Draft coords are OpenLayers map space (y-up). The feature stays in map
+        // space for display; the input sent to the backend is image-pixel space.
         const coords = pts.map((p) => [p[0], p[1]]);
         const feature = new Feature(new MultiPoint(coords));
         beginDraft(feature, "keypoint", {
@@ -519,11 +527,11 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
           label: null,
           box: null,
           polygon: null,
-          keypoint: { points: coords },
+          keypoint: { points: coords.map((c) => [c[0], height - c[1]]) },
         });
       }
       clearKeypointDraft();
-    }, [clearKeypointDraft, beginDraft]);
+    }, [clearKeypointDraft, beginDraft, height]);
 
     const cancelKeypointGroup = useCallback(() => {
       clearKeypointDraft();
@@ -760,7 +768,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
             pointerFrameRef.current = null;
             const latest = latestPointerCoordinateRef.current;
             if (!latest) return;
-            const pt = mapToImage([latest[0], latest[1]]);
+            const pt = mapToImage([latest[0], latest[1]], height);
             onCoordinateChange(pt.x, pt.y);
           });
         } else if (coord) {
@@ -817,7 +825,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       annotations.forEach((ann) => {
         const existing = source.getFeatureById(ann.id);
         if (!existingIds.has(ann.id) || !existing) {
-          source.addFeature(annotationToFeature(ann));
+          source.addFeature(annotationToFeature(ann, height));
           return;
         }
 
@@ -828,7 +836,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
           currentType !== ann.annotation_type ||
           currentData !== ann.data
         ) {
-          const updated = annotationToFeature(ann);
+          const updated = annotationToFeature(ann, height);
           existing.set("annotation_type", ann.annotation_type);
           existing.set("label", ann.label);
           existing.set("_backendData", ann.data);
@@ -838,7 +846,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       });
 
       vectorSourceRef.current?.changed();
-    }, [annotations]);
+    }, [annotations, height]);
 
     useEffect(() => {
       refreshFeatureStyles([
@@ -889,7 +897,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         const ext = feature.getGeometry()?.getExtent();
         if (!ext) return;
         if (ext[2] - ext[0] < 5 || ext[3] - ext[1] < 5) return;
-        const input = featureToAnnotationInput(feature, "box", null);
+        const input = featureToAnnotationInput(feature, "box", null, height);
         beginDraft(feature, "box", input);
       });
       const drawPolygonStartKey = drawPolygon.on("drawstart", () =>
@@ -897,7 +905,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       );
       const drawPolygonEndKey = drawPolygon.on("drawend", (e) => {
         onDrawPreviewRef.current?.(null);
-        const input = featureToAnnotationInput(e.feature, "polygon", null);
+        const input = featureToAnnotationInput(e.feature, "polygon", null, height);
         beginDraft(e.feature, "polygon", input);
       });
 
@@ -920,7 +928,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         drawBoxRef.current = null;
         drawPolygonRef.current = null;
       };
-    }, [beginDraft]);
+    }, [beginDraft, height]);
 
     useEffect(() => {
       selectRef.current?.setActive(
