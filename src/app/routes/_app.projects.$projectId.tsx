@@ -138,13 +138,15 @@ export default function ProjectLayout() {
             Developer
           </NavLink>
         )}
-        <NavLink
-          to={`/projects/${id}/inference`}
-          end
-          className={tabClassName}
-        >
-          Inference
-        </NavLink>
+        {isSupervisor && (
+          <NavLink
+            to={`/projects/${id}/inference`}
+            end
+            className={tabClassName}
+          >
+            Inference
+          </NavLink>
+        )}
         <NavLink
           to={`/projects/${id}/settings`}
           end

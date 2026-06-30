@@ -38,6 +38,15 @@ export default function ProjectInferenceJobDetailPage() {
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
+  if (!isSupervisor) {
+    return (
+      <div className="rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+        Your role is {project.my_role ?? "none"}. Inference job details are only
+        available to supervisors.
+      </div>
+    );
+  }
+
   const [job, setJob] = useState<JobDetailOutput | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

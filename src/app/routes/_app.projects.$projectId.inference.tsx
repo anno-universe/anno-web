@@ -41,6 +41,15 @@ export default function ProjectInferencePage() {
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
+  if (!isSupervisor) {
+    return (
+      <div className="rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+        Your role is {project.my_role ?? "none"}. Inference job management is
+        only available to supervisors.
+      </div>
+    );
+  }
+
   // Job list state (paginated from server)
   const [jobs, setJobs] = useState<JobOutput[]>([]);
   const [loading, setLoading] = useState(true);
