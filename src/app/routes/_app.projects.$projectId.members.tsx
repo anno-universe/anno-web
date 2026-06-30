@@ -10,6 +10,7 @@ import { searchUsers } from "@/api/users";
 import { PaginatedTable } from "@/components/shared/PaginatedTable";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
+import { Modal } from "@/components/shared/Modal";
 import {
   MemberRoleSelect,
   MemberRemoveButton,
@@ -295,76 +296,85 @@ export default function ProjectMembersPage() {
           </h2>
           <button
             onClick={() => {
-              setShowAddForm((prev) => !prev);
-              if (showAddForm) {
-                // Closing: reset state
-                setSearchQuery("");
-                setSearchResults([]);
-                setSelectedUser(null);
-                setSearchError("");
-              }
+              setShowAddForm(true);
+              // Reset form state
+              setSearchQuery("");
+              setSearchResults([]);
+              setSelectedUser(null);
+              setSearchError("");
             }}
             className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
-            {showAddForm ? "Cancel" : "Add Member"}
+            Add Member
           </button>
         </div>
       )}
 
-      {/* Add member form */}
-      {isSupervisor && showAddForm && (
-        <div className="mb-4 rounded-lg border bg-card p-4">
-          <div className="flex items-end gap-3 flex-wrap">
-            {/* Search input */}
-            <div ref={searchContainerRef} className="relative flex-1 min-w-[200px]">
-              <label className="text-xs font-medium text-muted-foreground block mb-1">
-                Search users by username
-              </label>
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                placeholder="Type a username..."
-                disabled={addingMember}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-              />
+      {/* Add member modal */}
+      <Modal
+        open={showAddForm}
+        title="Add Member"
+        size="lg"
+        onClose={() => {
+          setShowAddForm(false);
+          setSearchQuery("");
+          setSearchResults([]);
+          setSelectedUser(null);
+          setSearchError("");
+        }}
+      >
+        <div className="space-y-3">
+          {/* Search input */}
+          <div ref={searchContainerRef} className="relative">
+            <label className="text-xs font-medium text-muted-foreground block mb-1">
+              Search users by username
+            </label>
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Type a username..."
+              disabled={addingMember}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            />
 
-              {/* Search results dropdown */}
-              {searchQuery && !selectedUser && (
-                <div className="absolute z-10 mt-1 w-full rounded-md border bg-card shadow-lg max-h-48 overflow-y-auto">
-                  {searchingUsers && (
+            {/* Search results dropdown */}
+            {searchQuery && !selectedUser && (
+              <div className="absolute z-10 mt-1 w-full rounded-md border bg-card shadow-lg max-h-48 overflow-y-auto">
+                {searchingUsers && (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                    Searching...
+                  </div>
+                )}
+                {!searchingUsers &&
+                  searchResults.length > 0 &&
+                  searchResults.map((user) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => handleSelectUser(user)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex flex-col"
+                    >
+                      <span className="font-medium">{user.username}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {user.email}
+                      </span>
+                    </button>
+                  ))}
+                {!searchingUsers &&
+                  searchResults.length === 0 && (
                     <div className="px-3 py-2 text-sm text-muted-foreground">
-                      Searching...
+                      No users found
                     </div>
                   )}
-                  {!searchingUsers &&
-                    searchResults.length > 0 &&
-                    searchResults.map((user) => (
-                      <button
-                        key={user.id}
-                        type="button"
-                        onClick={() => handleSelectUser(user)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex flex-col"
-                      >
-                        <span className="font-medium">{user.username}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {user.email}
-                        </span>
-                      </button>
-                    ))}
-                  {!searchingUsers &&
-                    searchResults.length === 0 && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">
-                        No users found
-                      </div>
-                    )}
-                </div>
-              )}
-            </div>
+              </div>
+            )}
+          </div>
 
-            {/* Role selector */}
-            {selectedUser && (
+          {/* Role + Add */}
+          {selectedUser && (
+            <>
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">
                   Role
@@ -381,39 +391,33 @@ export default function ProjectMembersPage() {
                   <option value="supervisor">Supervisor</option>
                 </select>
               </div>
-            )}
 
-            {/* Add button */}
-            {selectedUser && (
-              <button
-                onClick={handleAddMember}
-                disabled={addingMember}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {addingMember ? "Adding..." : `Add as ${addRole}`}
-              </button>
-            )}
-          </div>
-
-          {/* Selected user confirmation */}
-          {selectedUser && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Adding{" "}
-              <span className="font-medium text-foreground">
-                {selectedUser.username}
-              </span>{" "}
-              ({selectedUser.email}) as{" "}
-              <span className="font-medium text-foreground">
-                {addRole}
-              </span>
-            </p>
+              <p className="text-xs text-muted-foreground">
+                Adding{" "}
+                <span className="font-medium text-foreground">
+                  {selectedUser.username}
+                </span>{" "}
+                ({selectedUser.email}) as{" "}
+                <span className="font-medium text-foreground">{addRole}</span>
+              </p>
+            </>
           )}
 
           {searchError && (
-            <p className="mt-2 text-xs text-destructive">{searchError}</p>
+            <p className="text-xs text-destructive">{searchError}</p>
+          )}
+
+          {selectedUser && (
+            <button
+              onClick={handleAddMember}
+              disabled={addingMember}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {addingMember ? "Adding..." : `Add as ${addRole}`}
+            </button>
           )}
         </div>
-      )}
+      </Modal>
 
       {/* Member list error */}
       {error && (
