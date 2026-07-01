@@ -11,6 +11,21 @@ import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { JobStatusBadge } from "@/components/inference/JobStatusBadge";
 import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useSetBreadcrumb } from "@/lib/breadcrumb";
 import { cn } from "@/lib/utils";
@@ -193,89 +208,88 @@ export default function ProjectInferenceJobDetailPage() {
       </Link>
 
       {/* Job metadata card */}
-      <div className="rounded-md border bg-card p-5 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-foreground">
-              Job #{job.id}
-            </h2>
-            <JobStatusBadge status={job.status} />
-          </div>
-          <div className="flex items-center gap-2">
-            {isSupervisor &&
-              ACTIVE_JOB_STATUSES.includes(job.status) && (
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CardTitle>Job #{job.id}</CardTitle>
+              <JobStatusBadge status={job.status} />
+            </div>
+            <div className="flex items-center gap-2">
+              {isSupervisor &&
+                ACTIVE_JOB_STATUSES.includes(job.status) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCancelTarget(true)}
+                    className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-700"
+                  >
+                    Cancel
+                  </Button>
+                )}
+              {isSupervisor && job.status === "failed" && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setCancelTarget(true)}
-                  className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-700"
+                  onClick={() => setRetryTarget(true)}
                 >
-                  Cancel
+                  Retry
                 </Button>
               )}
-            {isSupervisor && job.status === "failed" && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setRetryTarget(true)}
-              >
-                Retry
-              </Button>
-            )}
+            </div>
           </div>
-        </div>
-
-        {/* Details grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-          <Detail label="Provider" value={provider?.name ?? `Provider #${job.provider_id}`} />
-          <Detail label="Created" value={formatDate(job.created_at)} />
-          <Detail label="Started" value={formatDate(job.started_at)} />
-          <Detail label="Finished" value={formatDate(job.finished_at)} />
-        </div>
-
-        {/* Progress bar */}
-        <div className="mt-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-            <span>
-              {job.completed_items} / {job.total_items} images (
-              {job.failed_items} failed)
-            </span>
-            <span>{pct}%</span>
+        </CardHeader>
+        <CardContent>
+          {/* Details grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <Detail label="Provider" value={provider?.name ?? `Provider #${job.provider_id}`} />
+            <Detail label="Created" value={formatDate(job.created_at)} />
+            <Detail label="Started" value={formatDate(job.started_at)} />
+            <Detail label="Finished" value={formatDate(job.finished_at)} />
           </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
+
+          {/* Progress bar */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+              <span>
+                {job.completed_items} / {job.total_items} images (
+                {job.failed_items} failed)
+              </span>
+              <span>{pct}%</span>
+            </div>
+            <Progress
+              value={pct}
               className={cn(
-                "h-full rounded-full transition-all duration-500",
-                job.status === "failed"
-                  ? "bg-red-500"
-                  : job.status === "completed"
-                    ? "bg-green-500"
-                    : "bg-blue-500"
+                "h-2.5 [&>div]:transition-all [&>div]:duration-500",
+                job.status === "failed" && "[&>div]:bg-red-500",
+                job.status === "completed" && "[&>div]:bg-green-500",
+                job.status !== "failed" &&
+                  job.status !== "completed" &&
+                  "[&>div]:bg-blue-500"
               )}
-              style={{ width: `${pct}%` }}
             />
           </div>
-        </div>
 
-        {/* Stats row */}
-        <div className="mt-3 flex items-center gap-6 text-xs text-muted-foreground">
-          <span>Annotations created: <strong className="text-foreground">{job.annotations_created}</strong></span>
-          {job.cancel_requested && (
-            <span className="text-amber-600 font-medium">
-              Cancellation requested — worker will stop after current image.
-            </span>
-          )}
-        </div>
-
-        {/* Error */}
-        {job.error && (
-          <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-            {job.error}
+          {/* Stats row */}
+          <div className="mt-3 flex items-center gap-6 text-xs text-muted-foreground">
+            <span>Annotations created: <strong className="text-foreground">{job.annotations_created}</strong></span>
+            {job.cancel_requested && (
+              <span className="text-amber-600 font-medium">
+                Cancellation requested — worker will stop after current image.
+              </span>
+            )}
           </div>
-        )}
-      </div>
+
+          {/* Error */}
+          {job.error && (
+            <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {job.error}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Items table */}
       <h3 className="text-sm font-semibold text-foreground mb-3">
@@ -284,55 +298,54 @@ export default function ProjectInferenceJobDetailPage() {
       {job.items.length === 0 ? (
         <p className="text-xs text-muted-foreground">No items in this job.</p>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50 text-left">
-                <th className="px-3 py-2 font-medium text-foreground">
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50 hover:bg-muted/50">
+                <TableHead className="px-3 py-2">
                   Image ID
-                </th>
-                <th className="px-3 py-2 font-medium text-foreground">
+                </TableHead>
+                <TableHead className="px-3 py-2">
                   Status
-                </th>
-                <th className="px-3 py-2 font-medium text-foreground">
+                </TableHead>
+                <TableHead className="px-3 py-2">
                   Annotations
-                </th>
-                <th className="px-3 py-2 font-medium text-foreground">
+                </TableHead>
+                <TableHead className="px-3 py-2">
                   Attempts
-                </th>
-                <th className="px-3 py-2 font-medium text-foreground">Error</th>
-              </tr>
-            </thead>
-            <tbody>
+                </TableHead>
+                <TableHead className="px-3 py-2">Error</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {job.items.map((item) => (
-                <tr
+                <TableRow
                   key={item.id}
-                  className="border-b last:border-b-0 hover:bg-muted/30"
                 >
-                  <td className="px-3 py-2 tabular-nums text-foreground">
+                  <TableCell className="px-3 py-2 tabular-nums text-foreground">
                     <Link
                       to={`/projects/${pid}/images/${item.image_id}/annotate`}
                       className="text-primary hover:underline"
                     >
                       {item.image_id}
                     </Link>
-                  </td>
-                  <td className="px-3 py-2">
+                  </TableCell>
+                  <TableCell className="px-3 py-2">
                     <JobStatusBadge status={item.status} />
-                  </td>
-                  <td className="px-3 py-2 tabular-nums">
+                  </TableCell>
+                  <TableCell className="px-3 py-2 tabular-nums">
                     {item.annotations_created}
-                  </td>
-                  <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="px-3 py-2 tabular-nums text-muted-foreground">
                     {item.attempts}
-                  </td>
-                  <td className="px-3 py-2 max-w-[240px] truncate text-xs text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="px-3 py-2 max-w-[240px] truncate text-xs text-muted-foreground">
                     {item.error || "—"}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
 

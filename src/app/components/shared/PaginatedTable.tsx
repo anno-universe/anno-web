@@ -1,6 +1,7 @@
 import { LoadingSpinner } from "./LoadingSpinner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -118,7 +119,8 @@ export function PaginatedTable<T>({
       </Table>
 
       {/* Pagination controls */}
-      <div className="flex items-center justify-between border-t px-4 py-3">
+      <Separator />
+      <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span>
             {count === 0

@@ -5,7 +5,11 @@ import { getProjectTags } from "@/api/tags";
 import { AuthenticatedImage } from "@/components/image/AuthenticatedImage";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
-import { EmptyState } from "@/components/shared/EmptyState";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import {
   PaginatedTable,
@@ -307,7 +311,11 @@ export default function ImagesPage() {
       </div>
 
       {!loading && count === 0 ? (
-        <EmptyState message="No images yet." />
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No images yet</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <PaginatedTable
           columns={imageColumns(pid, handleAnnotate)}

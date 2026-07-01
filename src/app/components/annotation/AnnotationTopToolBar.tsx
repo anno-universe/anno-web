@@ -1,4 +1,9 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import { ImageTagBar } from "./ImageTagBar";
 import type { Image2DOutput } from "@/types/image";
 import type { TagOutput, ImageTagOutput } from "@/types/tag";
@@ -48,30 +53,42 @@ export function AnnotationTopToolBar({
     <div className="flex h-10 shrink-0 items-center justify-between border-b bg-card px-3">
       {/* Left: prev btn + image info + next btn */}
       <div className="flex items-center gap-1 text-xs text-muted-foreground">
-        <button
-          type="button"
-          disabled={prevImageId == null || imagesLoading}
-          onClick={() => prevImageId != null && onNavigate(prevImageId)}
-          className="inline-flex items-center justify-center rounded p-0.5 hover:bg-muted hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-          title="Previous image"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              disabled={prevImageId == null || imagesLoading}
+              onClick={() => prevImageId != null && onNavigate(prevImageId)}
+              className="inline-flex items-center justify-center rounded p-0.5 hover:bg-muted hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Previous image</p>
+          </TooltipContent>
+        </Tooltip>
 
         <span className="font-medium text-foreground">{image.file_name}<span className="ml-1 text-muted-foreground tabular-nums">#{image.id}</span></span>
         {dimensions && (
           <span className="text-muted-foreground">{dimensions}</span>
         )}
 
-        <button
-          type="button"
-          disabled={nextImageId == null || imagesLoading}
-          onClick={() => nextImageId != null && onNavigate(nextImageId)}
-          className="inline-flex items-center justify-center rounded p-0.5 hover:bg-muted hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-          title="Next image"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              disabled={nextImageId == null || imagesLoading}
+              onClick={() => nextImageId != null && onNavigate(nextImageId)}
+              className="inline-flex items-center justify-center rounded p-0.5 hover:bg-muted hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Next image</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Right: tags + error dismiss */}

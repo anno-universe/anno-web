@@ -5,7 +5,13 @@ import { CreateProjectDialog } from "@/components/project/CreateProjectDialog";
 import { ProjectRoleBadge } from "@/components/project/ProjectRoleBadge";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
-import { EmptyState } from "@/components/shared/EmptyState";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import {
   PaginatedTable,
@@ -109,13 +115,15 @@ export default function ProjectsPage() {
   if (!loading && pagination.count === 0) {
     return (
       <div className="py-20">
-        <EmptyState
-          message="No projects yet."
-          action={{
-            label: "Create your first project",
-            onClick: () => setShowCreate(true),
-          }}
-        />
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No projects yet</EmptyTitle>
+            <EmptyDescription>Create your first project to get started.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button onClick={() => setShowCreate(true)}>Create your first project</Button>
+          </EmptyContent>
+        </Empty>
         <CreateProjectDialog
           open={showCreate}
           onClose={() => setShowCreate(false)}

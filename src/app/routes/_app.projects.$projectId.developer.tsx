@@ -83,8 +83,8 @@ export default function ProjectDeveloperPage() {
   const [creating, setCreating] = useState(false);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
 
-  // Edit state (one at a time)
-  const [editingId, setEditingId] = useState<number | null>(null);
+  // Edit state
+  const [editingKey, setEditingKey] = useState<APIKeyOutput | null>(null);
   const [editName, setEditName] = useState("");
   const [editExpires, setEditExpires] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
@@ -140,43 +140,38 @@ export default function ProjectDeveloperPage() {
 
   // ---- Edit ----
   function startEdit(key: APIKeyOutput) {
-    setEditingId(key.id);
+    setEditingKey(key);
     setEditName(key.name);
     setEditIsActive(key.is_active);
-    // Format ISO to datetime-local input value
     setEditExpires(key.expires_at ? toLocalDatetime(key.expires_at) : "");
   }
 
   function cancelEdit() {
-    setEditingId(null);
+    setEditingKey(null);
     setEditName("");
     setEditExpires("");
     setEditIsActive(true);
   }
 
-  async function handleUpdate(keyId: number) {
+  async function handleUpdate() {
+    if (!editingKey) return;
     setSaving(true);
-    const key = keys.find((k) => k.id === keyId);
-    if (!key) {
-      setSaving(false);
-      return;
-    }
     try {
       const patch: Record<string, unknown> = {};
-      if (editName.trim() && editName.trim() !== key.name) {
+      if (editName.trim() && editName.trim() !== editingKey.name) {
         patch.name = editName.trim();
       }
       const newExpiry = editExpires
         ? new Date(editExpires).toISOString()
         : null;
-      if (newExpiry !== key.expires_at) {
+      if (newExpiry !== editingKey.expires_at) {
         patch.expires_at = newExpiry;
       }
-      if (editIsActive !== key.is_active) {
+      if (editIsActive !== editingKey.is_active) {
         patch.is_active = editIsActive;
       }
       if (Object.keys(patch).length > 0) {
-        await updateApiKey(id, keyId, patch);
+        await updateApiKey(id, editingKey.id, patch);
         await fetchKeys();
         toast.success("API key updated.");
       }
@@ -300,6 +295,70 @@ export default function ProjectDeveloperPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit modal */}
+      <Dialog
+        open={editingKey !== null}
+        onOpenChange={(next) => {
+          if (!next) cancelEdit();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit API Key</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <Field>
+              <FieldLabel htmlFor="editKeyName">Name</FieldLabel>
+              <Input
+                id="editKeyName"
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>Active</FieldLabel>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <Switch
+                  checked={editIsActive}
+                  onCheckedChange={setEditIsActive}
+                />
+                <span className="text-sm">
+                  {editIsActive ? "Active" : "Inactive"}
+                </span>
+              </label>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="editKeyExpires">Expires (optional)</FieldLabel>
+              <Input
+                id="editKeyExpires"
+                type="datetime-local"
+                value={editExpires}
+                onChange={(e) => setEditExpires(e.target.value)}
+                className="max-w-xs"
+              />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={cancelEdit}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleUpdate}
+              disabled={saving || !editName.trim()}
+            >
+              {saving ? <LoadingSpinner /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Error */}
       {error && <ErrorAlert message={error} onRetry={fetchKeys} />}
 
@@ -332,16 +391,7 @@ export default function ProjectDeveloperPage() {
                 <TableRow key={key.id} className="hover:bg-muted/30">
                   {/* Name */}
                   <TableCell className="px-3 text-foreground">
-                    {editingId === key.id ? (
-                      <Input
-                        type="text"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="h-8"
-                      />
-                    ) : (
-                      key.name
-                    )}
+                    {key.name}
                   </TableCell>
 
                   {/* Prefix */}
@@ -352,40 +402,21 @@ export default function ProjectDeveloperPage() {
 
                   {/* Status */}
                   <TableCell className="px-3">
-                    {editingId === key.id ? (
-                      <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                        <Switch
-                          checked={editIsActive}
-                          onCheckedChange={setEditIsActive}
-                        />
-                        <span className="text-xs">
-                          {editIsActive ? "Active" : "Inactive"}
-                        </span>
-                      </label>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          key.is_active
-                            ? "bg-green-100 text-green-700"
-                            : "bg-muted text-muted-foreground"
-                        )}
-                      >
-                        {key.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    )}
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        key.is_active
+                          ? "bg-green-100 text-green-700"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {key.is_active ? "Active" : "Inactive"}
+                    </Badge>
                   </TableCell>
 
                   {/* Expires */}
                   <TableCell className="px-3 text-muted-foreground">
-                    {editingId === key.id ? (
-                      <Input
-                        type="datetime-local"
-                        value={editExpires}
-                        onChange={(e) => setEditExpires(e.target.value)}
-                        className="h-8 w-auto"
-                      />
-                    ) : key.expires_at ? (
+                    {key.expires_at ? (
                       <span className="text-xs">
                         {formatDate(key.expires_at)}
                       </span>
@@ -408,47 +439,25 @@ export default function ProjectDeveloperPage() {
 
                   {/* Actions */}
                   <TableCell className="px-3">
-                    {editingId === key.id ? (
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          size="xs"
-                          onClick={() => handleUpdate(key.id)}
-                          disabled={saving}
-                        >
-                          {saving ? "…" : "Save"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="xs"
-                          onClick={cancelEdit}
-                          disabled={saving}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="xs"
-                          onClick={() => startEdit(key)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="xs"
-                          onClick={() => setDeleteTarget(key)}
-                          className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    )}
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => startEdit(key)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => setDeleteTarget(key)}
+                        className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
