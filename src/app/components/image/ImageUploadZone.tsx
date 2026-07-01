@@ -23,7 +23,7 @@ export function ImageUploadZone({
     if (!files || files.length === 0) return;
     onFilesSelected(Array.from(files));
     // Reset so re-selecting the same files fires onChange again
-    inputRef.current.value = "";
+    if (inputRef.current) inputRef.current.value = "";
   }
 
   function handleDragOver(e: DragEvent) {

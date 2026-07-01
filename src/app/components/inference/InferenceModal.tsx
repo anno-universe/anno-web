@@ -13,7 +13,22 @@ import {
   startSingleImageInference,
   getInferenceJob,
 } from "@/api/inferenceJobs";
-import { Modal } from "@/components/shared/Modal";
+import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import type { InferenceProviderOutput } from "@/types/inferenceProvider";
 import { TERMINAL_JOB_STATUSES } from "@/types/inferenceJob";
@@ -195,20 +210,24 @@ export function InferenceModal({
 
   // ---- Render ----
   return (
-    <Modal
+    <Dialog
       open={open}
-      title="AI Inference"
-      size="sm"
-      onClose={handleClose}
+      onOpenChange={(next) => {
+        if (!next) handleClose();
+      }}
     >
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>AI Inference</DialogTitle>
+        </DialogHeader>
       {/* Provider selector (select phase) */}
       {phase === "select" && (
         <>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-foreground">
+          <div className="flex flex-col gap-3">
+            <Field>
+              <FieldLabel htmlFor="inf-provider" className="text-xs">
                 Provider
-              </label>
+              </FieldLabel>
               {providersLoading ? (
                 <LoadingSpinner />
               ) : providers.length === 0 ? (
@@ -217,43 +236,50 @@ export function InferenceModal({
                   Ask a supervisor to add one in the Developer tab.
                 </p>
               ) : (
-                <select
-                  value={selectedProviderId ?? ""}
-                  onChange={(e) => {
-                    const id = e.target.value ? Number(e.target.value) : null;
+                <Select
+                  value={
+                    selectedProviderId != null
+                      ? String(selectedProviderId)
+                      : undefined
+                  }
+                  onValueChange={(v) => {
+                    const id = v ? Number(v) : null;
                     setSelectedProviderId(id);
                     if (id != null) saveProviderId(projectId, id);
                   }}
-                  className="w-full rounded-md border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="" disabled>
-                    Select a provider…
-                  </option>
-                  {providers.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                      {p.is_global ? " (Global)" : ""}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="inf-provider" className="w-full">
+                    <SelectValue placeholder="Select a provider…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {providers.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.name}
+                          {p.is_global ? " (Global)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               )}
-            </div>
+            </Field>
 
-            <button
+            <Button
               type="button"
               onClick={handleStart}
               disabled={
                 starting || !selectedProviderId || providers.length === 0
               }
-              className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="w-full"
             >
               {starting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="animate-spin" />
               ) : (
-                <Sparkles className="h-4 w-4" />
+                <Sparkles />
               )}
               Start Inference
-            </button>
+            </Button>
           </div>
         </>
       )}
@@ -287,13 +313,9 @@ export function InferenceModal({
               for this image.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
+          <Button type="button" onClick={handleClose}>
             Done
-          </button>
+          </Button>
         </div>
       )}
 
@@ -314,26 +336,23 @@ export function InferenceModal({
             </p>
           </div>
           <div className="flex gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => {
                 setPhase("select");
                 setError("");
               }}
-              className="rounded-md border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
             >
               Try Again
-            </button>
-            <button
-              type="button"
-              onClick={handleClose}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
+            </Button>
+            <Button type="button" onClick={handleClose}>
               Close
-            </button>
+            </Button>
           </div>
         </div>
       )}
-    </Modal>
+      </DialogContent>
+    </Dialog>
   );
 }

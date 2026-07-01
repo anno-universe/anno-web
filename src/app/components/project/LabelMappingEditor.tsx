@@ -1,5 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   getLabelEntry,
   isHexColor,
@@ -97,21 +99,21 @@ export function LabelMappingEditor({ value, onChange, disabled }: Props) {
       )}
       {rows.map((row) => (
         <div key={row.id} className="flex items-center gap-2">
-          <input
+          <Input
             type="text"
             value={row.name}
             onChange={(e) => update(row.id, { name: e.target.value })}
             disabled={disabled}
             placeholder="chromosome"
-            className="flex-1 rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1"
           />
-          <input
+          <Input
             type="number"
             value={row.value}
             onChange={(e) => update(row.id, { value: e.target.value })}
             disabled={disabled}
             placeholder="1"
-            className="w-24 rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-24"
           />
           <div className="flex w-32 items-center gap-1.5">
             <input
@@ -124,7 +126,7 @@ export function LabelMappingEditor({ value, onChange, disabled }: Props) {
               className="h-9 w-9 shrink-0 cursor-pointer rounded-md border bg-background p-1 disabled:cursor-not-allowed disabled:opacity-60"
               aria-label="Label color"
             />
-            <input
+            <Input
               type="text"
               value={row.color}
               onChange={(e) =>
@@ -132,29 +134,32 @@ export function LabelMappingEditor({ value, onChange, disabled }: Props) {
               }
               disabled={disabled}
               placeholder="#00FF00"
-              className={`min-w-0 flex-1 rounded-md border bg-background px-2 py-2 font-mono text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${
-                row.color && !isHexColor(row.color) ? "border-destructive/50" : ""
-              }`}
+              aria-invalid={!!row.color && !isHexColor(row.color)}
+              className="min-w-0 flex-1 px-2 font-mono text-xs"
             />
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => update(row.id, { color: randomLabelColor() })}
               disabled={disabled}
-              className="flex h-9 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+              className="h-9 w-7 text-muted-foreground"
               aria-label="Random color"
             >
-              <RefreshCw className="h-3.5 w-3.5" />
-            </button>
+              <RefreshCw />
+            </Button>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             onClick={() => remove(row.id)}
             disabled={disabled}
-            className="flex h-9 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+            className="h-9 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             aria-label="Remove label"
           >
-            <Trash2 className="h-4 w-4" />
-          </button>
+            <Trash2 />
+          </Button>
         </div>
       ))}
       {rows.length === 0 && (
@@ -163,14 +168,16 @@ export function LabelMappingEditor({ value, onChange, disabled }: Props) {
         </p>
       )}
       {!disabled && (
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={add}
-          className="flex items-center gap-1.5 rounded-md border border-dashed px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="border-dashed text-xs text-muted-foreground"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus />
           Add label
-        </button>
+        </Button>
       )}
     </div>
   );

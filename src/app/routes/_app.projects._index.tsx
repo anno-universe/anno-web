@@ -6,6 +6,7 @@ import { ProjectRoleBadge } from "@/components/project/ProjectRoleBadge";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { Button } from "@/components/ui/button";
 import {
   PaginatedTable,
   type Column,
@@ -127,12 +128,7 @@ export default function ProjectsPage() {
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold text-foreground">Projects</h1>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          Create Project
-        </button>
+        <Button onClick={() => setShowCreate(true)}>Create Project</Button>
       </div>
 
       <PaginatedTable

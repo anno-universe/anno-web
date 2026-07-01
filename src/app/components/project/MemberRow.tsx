@@ -1,3 +1,12 @@
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { ProjectMemberOutput } from "@/types/project";
 
 interface MemberRoleSelectProps {
@@ -14,15 +23,21 @@ export function MemberRoleSelect({
   onChange,
 }: MemberRoleSelectProps) {
   return (
-    <select
+    <Select
       value={member.role}
       disabled={isCreator || disabled}
-      onChange={(e) => onChange(member.user_id, e.target.value)}
-      className="rounded-md border bg-background px-2 py-1 text-sm disabled:opacity-50"
+      onValueChange={(v) => onChange(member.user_id, v)}
     >
-      <option value="worker">Worker</option>
-      <option value="supervisor">Supervisor</option>
-    </select>
+      <SelectTrigger size="sm">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectItem value="worker">Worker</SelectItem>
+          <SelectItem value="supervisor">Supervisor</SelectItem>
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -42,12 +57,14 @@ export function MemberRemoveButton({
   if (isCreator) return null;
 
   return (
-    <button
+    <Button
+      variant="outline"
+      size="xs"
       onClick={() => onRemove(member.user_id)}
       disabled={disabled}
-      className="rounded-md border border-destructive/50 px-2 py-1 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
+      className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
     >
       Remove
-    </button>
+    </Button>
   );
 }

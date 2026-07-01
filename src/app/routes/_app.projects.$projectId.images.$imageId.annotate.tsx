@@ -295,7 +295,7 @@ export default function AnnotatePage() {
 
   // ---- Inference completion handler ----
   const handleInferenceComplete = useCallback(
-    async (annotationsCreated: number) => {
+    async (_annotationsCreated: number) => {
       try {
         const annResp = await getAnnotations(pid, iid, { limit: 500 });
         setAnnotations(annResp.items);

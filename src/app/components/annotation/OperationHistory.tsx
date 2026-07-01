@@ -1,3 +1,5 @@
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import type { OperationOutput } from "@/types/operation";
 
 const actionColors: Record<string, string> = {
@@ -34,13 +36,16 @@ export function OperationHistory({ operations }: Props) {
           key={op.id}
           className="flex items-center gap-2 border-b px-3 py-1.5 text-[11px] last:border-b-0"
         >
-          <span
-            className={`inline-flex shrink-0 items-center rounded border px-1.5 py-0 text-[10px] font-medium ${
-              actionColors[op.action] ?? "border-gray-200 bg-gray-50 text-gray-600"
-            }`}
+          <Badge
+            variant="outline"
+            className={cn(
+              "rounded px-1.5 text-[10px]",
+              actionColors[op.action] ??
+                "border-gray-200 bg-gray-50 text-gray-600"
+            )}
           >
             {op.action}
-          </span>
+          </Badge>
           <span className="shrink-0 text-muted-foreground">
             {formatTime(op.created_at)}
           </span>

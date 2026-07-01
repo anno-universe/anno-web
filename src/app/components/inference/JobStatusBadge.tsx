@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import type { JobStatus, JobItemStatus } from "@/types/inferenceJob";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -24,9 +25,10 @@ export function JobStatusBadge({ status, className }: Props) {
   const shouldPulse = PULSE_STATUSES.has(status);
 
   return (
-    <span
+    <Badge
+      variant="outline"
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
+        "gap-1.5 px-2.5",
         style,
         shouldPulse && "animate-pulse",
         className
@@ -36,6 +38,6 @@ export function JobStatusBadge({ status, className }: Props) {
         <span className="h-1.5 w-1.5 rounded-full bg-current" />
       )}
       {status}
-    </span>
+    </Badge>
   );
 }

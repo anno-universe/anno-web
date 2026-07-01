@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 const roleStyles: Record<string, string> = {
   supervisor:
@@ -16,13 +17,8 @@ export function ProjectRoleBadge({ role }: { role: string | null }) {
     "border-gray-200 bg-gray-50 text-gray-500";
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
-        style
-      )}
-    >
+    <Badge variant="outline" className={cn("rounded-md", style)}>
       {role ?? "—"}
-    </span>
+    </Badge>
   );
 }

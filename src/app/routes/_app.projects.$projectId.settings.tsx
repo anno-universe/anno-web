@@ -16,6 +16,16 @@ import {
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldDescription,
+} from "@/components/ui/field";
 import {
   needsProjectConfigUpgrade,
   upgradeLabelMappingConfig,
@@ -172,98 +182,88 @@ export default function ProjectSettingsPage() {
         </div>
       )}
 
-      <form onSubmit={handleSave} className="space-y-5">
-        {error && <ErrorAlert message={error} />}
-        {successMsg && (
-          <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-            {successMsg}
-          </div>
-        )}
+      <form onSubmit={handleSave}>
+        <FieldGroup className="gap-5">
+          {error && <ErrorAlert message={error} />}
+          {successMsg && (
+            <Alert>
+              <AlertDescription>{successMsg}</AlertDescription>
+            </Alert>
+          )}
 
-        <div className="space-y-2">
-          <label htmlFor="sname" className="text-sm font-medium text-foreground">
-            Name
-          </label>
-          <input
-            id="sname"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={!isSupervisor}
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label htmlFor="sdesc" className="text-sm font-medium text-foreground">
-            Description
-          </label>
-          <textarea
-            id="sdesc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            disabled={!isSupervisor}
-            rows={2}
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground">Label mapping</p>
-          <p className="text-xs text-muted-foreground">
-            The classes annotators assign. Stored as name → numeric id.
-          </p>
-          <LabelMappingEditor
-            key={`labels-${project.id}`}
-            value={labelMapping.labels}
-            onChange={(labels) =>
-              setLabelMapping({ version: 2, labels })
-            }
-            disabled={!isSupervisor}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground">
-            Annotation settings
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Configure which tools and options are available to annotators.
-          </p>
-          <AnnotationSettings
-            key={`ann-settings-${project.id}`}
-            value={metaInfo}
-            onChange={setMetaInfo}
-            disabled={!isSupervisor}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground">Tags</p>
-          <p className="text-xs text-muted-foreground">
-            Define tags that can be applied to images to track annotation
-            progress.
-          </p>
-          {loadingTags ? (
-            <LoadingSpinner />
-          ) : (
-            <TagManager
-              ref={tagManagerRef}
-              tags={projectTags}
+          <Field>
+            <FieldLabel htmlFor="sname">Name</FieldLabel>
+            <Input
+              id="sname"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               disabled={!isSupervisor}
             />
-          )}
-        </div>
+          </Field>
 
-        {isSupervisor && (
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
-            {saving ? <LoadingSpinner /> : "Save"}
-          </button>
-        )}
+          <Field>
+            <FieldLabel htmlFor="sdesc">Description</FieldLabel>
+            <Textarea
+              id="sdesc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              disabled={!isSupervisor}
+              rows={2}
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel>Label mapping</FieldLabel>
+            <FieldDescription>
+              The classes annotators assign. Stored as name → numeric id.
+            </FieldDescription>
+            <LabelMappingEditor
+              key={`labels-${project.id}`}
+              value={labelMapping.labels}
+              onChange={(labels) =>
+                setLabelMapping({ version: 2, labels })
+              }
+              disabled={!isSupervisor}
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel>Annotation settings</FieldLabel>
+            <FieldDescription>
+              Configure which tools and options are available to annotators.
+            </FieldDescription>
+            <AnnotationSettings
+              key={`ann-settings-${project.id}`}
+              value={metaInfo}
+              onChange={setMetaInfo}
+              disabled={!isSupervisor}
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel>Tags</FieldLabel>
+            <FieldDescription>
+              Define tags that can be applied to images to track annotation
+              progress.
+            </FieldDescription>
+            {loadingTags ? (
+              <LoadingSpinner />
+            ) : (
+              <TagManager
+                ref={tagManagerRef}
+                tags={projectTags}
+                disabled={!isSupervisor}
+              />
+            )}
+          </Field>
+
+          {isSupervisor && (
+            <Button type="submit" disabled={saving} className="w-fit">
+              {saving ? <LoadingSpinner /> : "Save"}
+            </Button>
+          )}
+        </FieldGroup>
       </form>
 
       {isSupervisor && (
@@ -275,14 +275,16 @@ export default function ProjectSettingsPage() {
             Once you delete a project, there is no going back. All images,
             annotations, and member data will be permanently removed.
           </p>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={() => setShowDeleteConfirm(true)}
             disabled={deleting}
-            className="mt-3 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20 disabled:opacity-50"
+            className="mt-3 border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive"
           >
             {deleting ? "Deleting…" : "Delete Project"}
-          </button>
+          </Button>
         </div>
       )}
 

@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+
 export function EmptyState({
   message,
   action,
@@ -9,12 +11,13 @@ export function EmptyState({
     <div className="flex flex-col items-center justify-center p-12 text-center">
       <p className="text-sm text-muted-foreground">{message}</p>
       {action && (
-        <button
+        <Button
+          variant="link"
           onClick={action.onClick}
-          className="mt-3 text-sm font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+          className="mt-3 text-primary"
         >
           {action.label}
-        </button>
+        </Button>
       )}
     </div>
   );

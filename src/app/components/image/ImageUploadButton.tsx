@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { uploadImage } from "@/api/images";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   projectId: number;
@@ -37,10 +38,9 @@ export function ImageUploadButton({ projectId, onUploaded }: Props) {
         onChange={handleChange}
         className="hidden"
       />
-      <button
+      <Button
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
-        className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
       >
         {uploading ? (
           <>
@@ -49,7 +49,7 @@ export function ImageUploadButton({ projectId, onUploaded }: Props) {
         ) : (
           "Upload Image"
         )}
-      </button>
+      </Button>
       {error && (
         <p className="mt-2 text-xs text-destructive">{error}</p>
       )}

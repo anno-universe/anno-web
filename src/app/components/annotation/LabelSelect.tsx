@@ -1,4 +1,13 @@
 import { getLabelName, labelOptionsFromMapping } from "@/lib/utils/labelMapping";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Props {
   labelMapping: Record<string, unknown>;
@@ -18,7 +27,7 @@ export function LabelSelect({
   if (options.length === 0) {
     // No label_mapping: allow manual number input
     return (
-      <input
+      <Input
         type="number"
         value={value ?? ""}
         onChange={(e) => {
@@ -26,28 +35,31 @@ export function LabelSelect({
           onChange(v === "" ? null : Number(v));
         }}
         disabled={disabled}
-        className="w-20 rounded-md border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+        className="h-8 w-20 text-xs"
         placeholder="Label"
       />
     );
   }
 
   return (
-    <select
-      value={value ?? ""}
-      onChange={(e) => {
-        const v = e.target.value;
-        onChange(v === "" ? null : Number(v));
-      }}
+    <Select
+      value={value != null ? String(value) : undefined}
+      onValueChange={(v) => onChange(v === "" ? null : Number(v))}
       disabled={disabled}
-      className="w-full rounded-md border bg-background px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+      <SelectTrigger size="sm" className="w-full text-xs">
+        <SelectValue placeholder="Label" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {options.map((opt) => (
+            <SelectItem key={opt.value} value={String(opt.value)}>
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }
 

@@ -7,6 +7,9 @@ import {
 } from "react";
 import { Plus, Trash2, RefreshCw } from "lucide-react";
 import { randomLabelColor } from "@/lib/utils/labelMapping";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { TagOutput, TagCreateInput, TagUpdateInput } from "@/types/tag";
 
 interface Row {
@@ -159,13 +162,13 @@ export const TagManager = forwardRef<TagManagerHandle, Props>(
           <div key={row.key} className="flex items-center gap-2">
             {/* Name */}
             {row.id == null ? (
-              <input
+              <Input
                 type="text"
                 value={row.name}
                 onChange={(e) => update(row.key, { name: e.target.value })}
                 disabled={disabled}
                 placeholder="key"
-                className="flex-1 rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex-1"
               />
             ) : (
               <span className="flex-1 truncate px-3 py-2 font-mono text-sm text-muted-foreground">
@@ -174,7 +177,7 @@ export const TagManager = forwardRef<TagManagerHandle, Props>(
             )}
 
             {/* Display name */}
-            <input
+            <Input
               type="text"
               value={row.displayName}
               onChange={(e) =>
@@ -182,7 +185,7 @@ export const TagManager = forwardRef<TagManagerHandle, Props>(
               }
               disabled={disabled}
               placeholder="Display name"
-              className="flex-1 rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex-1"
             />
 
             {/* Color */}
@@ -197,7 +200,7 @@ export const TagManager = forwardRef<TagManagerHandle, Props>(
                 className="h-9 w-9 shrink-0 cursor-pointer rounded-md border bg-background p-1 disabled:cursor-not-allowed disabled:opacity-60"
                 aria-label="Tag color"
               />
-              <input
+              <Input
                 type="text"
                 value={row.color}
                 onChange={(e) =>
@@ -205,44 +208,44 @@ export const TagManager = forwardRef<TagManagerHandle, Props>(
                 }
                 disabled={disabled}
                 placeholder="#6366F1"
-                className="min-w-0 flex-1 rounded-md border bg-background px-2 py-2 font-mono text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                className="min-w-0 flex-1 px-2 font-mono text-xs"
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() =>
                   update(row.key, { color: randomLabelColor() })
                 }
                 disabled={disabled}
-                className="flex h-9 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+                className="h-9 w-7 text-muted-foreground"
                 aria-label="Random color"
               >
-                <RefreshCw className="h-3.5 w-3.5" />
-              </button>
+                <RefreshCw />
+              </Button>
             </div>
 
             {/* Active */}
-            <div className="w-16 text-center">
-              <input
-                type="checkbox"
+            <div className="flex w-16 justify-center">
+              <Switch
                 checked={row.isActive}
-                onChange={(e) =>
-                  update(row.key, { isActive: e.target.checked })
-                }
+                onCheckedChange={(on) => update(row.key, { isActive: on })}
                 disabled={disabled}
-                className="h-4 w-4 cursor-pointer rounded border-input text-primary focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
 
             {/* Delete */}
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => remove(row.key)}
               disabled={disabled}
-              className="flex h-9 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+              className="h-9 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               aria-label="Delete tag"
             >
-              <Trash2 className="h-4 w-4" />
-            </button>
+              <Trash2 />
+            </Button>
           </div>
         ))}
 
@@ -253,14 +256,16 @@ export const TagManager = forwardRef<TagManagerHandle, Props>(
         )}
 
         {!disabled && (
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={add}
-            className="flex items-center gap-1.5 rounded-md border border-dashed px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="border-dashed text-xs text-muted-foreground"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus />
             Add tag
-          </button>
+          </Button>
         )}
       </div>
     );
