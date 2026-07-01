@@ -33,6 +33,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -78,7 +87,7 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
   const [creating, setCreating] = useState(false);
 
   // Edit state
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingProvider, setEditingProvider] = useState<InferenceProviderOutput | null>(null);
   const [editName, setEditName] = useState("");
   const [editUrl, setEditUrl] = useState("");
   const [editModelName, setEditModelName] = useState("");
@@ -161,7 +170,7 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
 
   // ---- Edit ----
   function startEdit(p: InferenceProviderOutput) {
-    setEditingId(p.id);
+    setEditingProvider(p);
     setEditName(p.name);
     setEditUrl(p.inference_url);
     setEditModelName(p.model_name);
@@ -175,41 +184,37 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
   }
 
   function cancelEdit() {
-    setEditingId(null);
+    setEditingProvider(null);
   }
 
-  async function handleUpdate(providerId: number) {
+  async function handleUpdate() {
+    if (!editingProvider) return;
     setSaving(true);
-    const provider = providers.find((p) => p.id === providerId);
-    if (!provider) {
-      setSaving(false);
-      return;
-    }
     try {
       const patch: Record<string, unknown> = {};
-      if (editName.trim() && editName.trim() !== provider.name)
+      if (editName.trim() && editName.trim() !== editingProvider.name)
         patch.name = editName.trim();
-      if (editUrl.trim() && editUrl.trim() !== provider.inference_url)
+      if (editUrl.trim() && editUrl.trim() !== editingProvider.inference_url)
         patch.inference_url = editUrl.trim();
-      if (editModelName.trim() !== (provider.model_name ?? ""))
+      if (editModelName.trim() !== (editingProvider.model_name ?? ""))
         patch.model_name = editModelName.trim() || null;
-      if (editDescription.trim() !== (provider.description ?? ""))
+      if (editDescription.trim() !== (editingProvider.description ?? ""))
         patch.description = editDescription.trim() || null;
       if (
         JSON.stringify(editResultTypes.sort()) !==
-        JSON.stringify([...provider.supported_result_types].sort())
+        JSON.stringify([...editingProvider.supported_result_types].sort())
       )
         patch.supported_result_types = editResultTypes;
-      if (editAuthType !== provider.auth_type) patch.auth_type = editAuthType;
-      if (editAuthParam.trim() !== (provider.auth_param_name ?? ""))
+      if (editAuthType !== editingProvider.auth_type) patch.auth_type = editAuthType;
+      if (editAuthParam.trim() !== (editingProvider.auth_param_name ?? ""))
         patch.auth_param_name = editAuthParam.trim() || null;
       if (editAuthSecret) patch.auth_secret = editAuthSecret;
-      if (editTimeout !== provider.timeout_seconds)
+      if (editTimeout !== editingProvider.timeout_seconds)
         patch.timeout_seconds = editTimeout;
-      if (editIsActive !== provider.is_active) patch.is_active = editIsActive;
+      if (editIsActive !== editingProvider.is_active) patch.is_active = editIsActive;
 
       if (Object.keys(patch).length > 0) {
-        await updateInferenceProvider(projectId, providerId, patch);
+        await updateInferenceProvider(projectId, editingProvider.id, patch);
         await fetchProviders();
         toast.success("Provider updated.");
       }
@@ -234,19 +239,6 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
       toast.error(err instanceof Error ? err.message : "Failed to delete provider");
     } finally {
       setDeleting(false);
-    }
-  }
-
-  // ---- Toggle result type in form ----
-  function toggleResultType(
-    current: ResultType[],
-    setter: (v: ResultType[]) => void,
-    type: ResultType
-  ) {
-    if (current.includes(type)) {
-      setter(current.filter((t) => t !== type));
-    } else {
-      setter([...current, type]);
     }
   }
 
@@ -316,7 +308,8 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
               isGlobal={false}
             />
           </div>
-          <DialogFooter className="shrink-0 border-t px-6 py-4">
+          <Separator />
+          <DialogFooter className="shrink-0 px-6 py-4">
             <Button
               type="button"
               variant="outline"
@@ -355,188 +348,82 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
           to add a global provider.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50 text-left">
-                <th className="px-3 py-2 font-medium text-foreground">Name</th>
-                <th className="px-3 py-2 font-medium text-foreground">Model</th>
-                <th className="px-3 py-2 font-medium text-foreground">URL</th>
-                <th className="px-3 py-2 font-medium text-foreground">
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50 hover:bg-muted/50">
+                <TableHead className="px-3 py-2">Name</TableHead>
+                <TableHead className="px-3 py-2">Model</TableHead>
+                <TableHead className="px-3 py-2">
                   Result Types
-                </th>
-                <th className="px-3 py-2 font-medium text-foreground">Auth</th>
-                <th className="px-3 py-2 font-medium text-foreground">
+                </TableHead>
+                <TableHead className="px-3 py-2">
                   Active
-                </th>
-                <th className="px-3 py-2 font-medium text-foreground">
+                </TableHead>
+                <TableHead className="px-3 py-2">
                   Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {providers.map((p) => (
-                <tr
+                <TableRow
                   key={p.id}
-                  className={cn(
-                    "border-b last:border-b-0 hover:bg-muted/30",
-                    p.is_global && "bg-muted/20"
-                  )}
+                  className={cn(p.is_global && "bg-muted/20")}
                 >
                   {/* Name */}
-                  <td className="px-3 py-2 text-foreground">
-                    {editingId === p.id ? (
-                      <Input
-                        type="text"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="h-8"
-                      />
-                    ) : (
-                      <span className="flex items-center gap-1.5">
-                        {p.name}
-                        {p.is_global && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            Global
-                          </Badge>
-                        )}
-                      </span>
-                    )}
-                  </td>
+                  <TableCell className="px-3 py-2 text-foreground">
+                    <span className="flex items-center gap-1.5">
+                      {p.name}
+                      {p.is_global && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          Global
+                        </Badge>
+                      )}
+                    </span>
+                  </TableCell>
 
                   {/* Model */}
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {editingId === p.id ? (
-                      <Input
-                        type="text"
-                        value={editModelName}
-                        onChange={(e) => setEditModelName(e.target.value)}
-                        className="h-8"
-                        placeholder="e.g. SAM-2"
-                      />
-                    ) : (
-                      p.model_name || "—"
-                    )}
-                  </td>
-
-                  {/* URL */}
-                  <td className="px-3 py-2 max-w-[160px] truncate text-xs text-muted-foreground">
-                    {editingId === p.id ? (
-                      <Input
-                        type="url"
-                        value={editUrl}
-                        onChange={(e) => setEditUrl(e.target.value)}
-                        className="h-8"
-                      />
-                    ) : (
-                      <span title={p.inference_url}>{p.inference_url}</span>
-                    )}
-                  </td>
+                  <TableCell className="px-3 py-2 text-muted-foreground">
+                    {p.model_name || "—"}
+                  </TableCell>
 
                   {/* Result Types */}
-                  <td className="px-3 py-2">
-                    {editingId === p.id ? (
-                      <div className="flex gap-2 flex-wrap">
-                        {ALL_RESULT_TYPES.map((rt) => (
-                          <label
-                            key={rt}
-                            className="inline-flex items-center gap-1 cursor-pointer"
-                          >
-                            <Checkbox
-                              checked={editResultTypes.includes(rt)}
-                              onCheckedChange={() =>
-                                toggleResultType(
-                                  editResultTypes,
-                                  setEditResultTypes,
-                                  rt
-                                )
-                              }
-                            />
-                            <span className="text-xs">{rt}</span>
-                          </label>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex gap-1 flex-wrap">
-                        {p.supported_result_types.map((rt) => (
-                          <Badge
-                            key={rt}
-                            variant="outline"
-                            className={cn(
-                              "text-[10px]",
-                              RESULT_TYPE_COLORS[rt] ??
-                                "bg-muted text-muted-foreground"
-                            )}
-                          >
-                            {rt}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-
-                  {/* Auth */}
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
-                    {editingId === p.id ? (
-                      <span className="text-xs">{editAuthType}</span>
-                    ) : (
-                      <>
-                        {p.auth_type === "none"
-                          ? "None"
-                          : `${p.auth_type}${p.has_auth_secret ? " (secret set)" : ""}`}
-                      </>
-                    )}
-                  </td>
+                  <TableCell className="px-3 py-2">
+                    <div className="flex gap-1 flex-wrap">
+                      {p.supported_result_types.map((rt) => (
+                        <Badge
+                          key={rt}
+                          variant="outline"
+                          className={cn(
+                            "text-[10px]",
+                            RESULT_TYPE_COLORS[rt] ??
+                              "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {rt}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TableCell>
 
                   {/* Active */}
-                  <td className="px-3 py-2">
-                    {editingId === p.id ? (
-                      <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                        <Switch
-                          checked={editIsActive}
-                          onCheckedChange={setEditIsActive}
-                        />
-                        <span className="text-xs">
-                          {editIsActive ? "Active" : "Inactive"}
-                        </span>
-                      </label>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          p.is_active
-                            ? "bg-green-100 text-green-700"
-                            : "bg-muted text-muted-foreground"
-                        )}
-                      >
-                        {p.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    )}
-                  </td>
+                  <TableCell className="px-3 py-2">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        p.is_active
+                          ? "bg-green-100 text-green-700"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {p.is_active ? "Active" : "Inactive"}
+                    </Badge>
+                  </TableCell>
 
                   {/* Actions */}
-                  <td className="px-3 py-2">
-                    {editingId === p.id ? (
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          size="xs"
-                          onClick={() => handleUpdate(p.id)}
-                          disabled={saving}
-                        >
-                          {saving ? "…" : "Save"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="xs"
-                          onClick={cancelEdit}
-                          disabled={saving}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : p.is_global ? (
+                  <TableCell className="px-3 py-2">
+                    {p.is_global ? (
                       <span className="text-xs text-muted-foreground">
                         Read-only
                       </span>
@@ -561,71 +448,75 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
                         </Button>
                       </div>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
 
-      {/* Edit auth fields (shown inline in edit mode via modal-style row expansion) */}
-      {editingId !== null && (
-        <div className="mt-4 rounded-md border p-4">
-          <h3 className="text-sm font-semibold text-foreground mb-3">
-            Edit Provider — Advanced Fields
-          </h3>
-          <ProviderForm
-            name={editName}
-            onNameChange={setEditName}
-            url={editUrl}
-            onUrlChange={setEditUrl}
-            modelName={editModelName}
-            onModelNameChange={setEditModelName}
-            description={editDescription}
-            onDescriptionChange={setEditDescription}
-            resultTypes={editResultTypes}
-            onResultTypesChange={setEditResultTypes}
-            authType={editAuthType}
-            onAuthTypeChange={setEditAuthType}
-            authParam={editAuthParam}
-            onAuthParamChange={setEditAuthParam}
-            authSecret={editAuthSecret}
-            onAuthSecretChange={setEditAuthSecret}
-            timeout={editTimeout}
-            onTimeoutChange={setEditTimeout}
-            isActive={editIsActive}
-            onIsActiveChange={setEditIsActive}
-            isGlobal={false}
-            hideBasicFields
-          >
-            <div className="flex gap-2 mt-4">
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => handleUpdate(editingId!)}
-                disabled={
-                  saving ||
-                  !editName.trim() ||
-                  !editUrl.trim() ||
-                  editResultTypes.length === 0
-                }
-              >
-                {saving ? <LoadingSpinner /> : "Save Changes"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={cancelEdit}
-                disabled={saving}
-              >
-                Cancel
-              </Button>
-            </div>
-          </ProviderForm>
-        </div>
-      )}
+      {/* Edit modal */}
+      <Dialog
+        open={editingProvider !== null}
+        onOpenChange={(next) => {
+          if (!next) cancelEdit();
+        }}
+      >
+        <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-xl">
+          <DialogHeader className="shrink-0 border-b px-6 py-4">
+            <DialogTitle>Edit Inference Provider</DialogTitle>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+            <ProviderForm
+              name={editName}
+              onNameChange={setEditName}
+              url={editUrl}
+              onUrlChange={setEditUrl}
+              modelName={editModelName}
+              onModelNameChange={setEditModelName}
+              description={editDescription}
+              onDescriptionChange={setEditDescription}
+              resultTypes={editResultTypes}
+              onResultTypesChange={setEditResultTypes}
+              authType={editAuthType}
+              onAuthTypeChange={setEditAuthType}
+              authParam={editAuthParam}
+              onAuthParamChange={setEditAuthParam}
+              authSecret={editAuthSecret}
+              onAuthSecretChange={setEditAuthSecret}
+              timeout={editTimeout}
+              onTimeoutChange={setEditTimeout}
+              isActive={editIsActive}
+              onIsActiveChange={setEditIsActive}
+              isGlobal={false}
+            />
+          </div>
+          <Separator />
+          <DialogFooter className="shrink-0 px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={cancelEdit}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleUpdate}
+              disabled={
+                saving ||
+                !editName.trim() ||
+                !editUrl.trim() ||
+                editResultTypes.length === 0
+              }
+            >
+              {saving ? <LoadingSpinner /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation */}
       <ConfirmDialog
@@ -701,48 +592,46 @@ function ProviderForm({
     <div className="mt-3 flex flex-col gap-3">
       {!hideBasicFields && (
         <>
-          {/* Name + URL row */}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Name">
-              <Input
-                type="text"
-                value={name}
-                onChange={(e) => onNameChange(e.target.value)}
-                placeholder="e.g. YOLOv8"
-                disabled={isGlobal}
-              />
-            </Field>
-            <Field label="Inference URL">
-              <Input
-                type="url"
-                value={url}
-                onChange={(e) => onUrlChange(e.target.value)}
-                placeholder="https://infer.example.com/predict"
-                disabled={isGlobal}
-              />
-            </Field>
-          </div>
-          {/* Model name + Description */}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Model Name (optional)">
-              <Input
-                type="text"
-                value={modelName}
-                onChange={(e) => onModelNameChange(e.target.value)}
-                placeholder="e.g. SAM-2"
-                disabled={isGlobal}
-              />
-            </Field>
-            <Field label="Description (optional)">
-              <Input
-                type="text"
-                value={description}
-                onChange={(e) => onDescriptionChange(e.target.value)}
-                placeholder="Short description"
-                disabled={isGlobal}
-              />
-            </Field>
-          </div>
+          {/* Name */}
+          <Field label="Name">
+            <Input
+              type="text"
+              value={name}
+              onChange={(e) => onNameChange(e.target.value)}
+              placeholder="e.g. YOLOv8"
+              disabled={isGlobal}
+            />
+          </Field>
+          {/* Inference URL */}
+          <Field label="Inference URL">
+            <Input
+              type="url"
+              value={url}
+              onChange={(e) => onUrlChange(e.target.value)}
+              placeholder="https://infer.example.com/predict"
+              disabled={isGlobal}
+            />
+          </Field>
+          {/* Model Name */}
+          <Field label="Model Name (optional)">
+            <Input
+              type="text"
+              value={modelName}
+              onChange={(e) => onModelNameChange(e.target.value)}
+              placeholder="e.g. SAM-2"
+              disabled={isGlobal}
+            />
+          </Field>
+          {/* Description */}
+          <Field label="Description (optional)">
+            <Input
+              type="text"
+              value={description}
+              onChange={(e) => onDescriptionChange(e.target.value)}
+              placeholder="Short description"
+              disabled={isGlobal}
+            />
+          </Field>
           {/* Result Types */}
           <Field label="Supported Result Types">
             <div className="flex gap-3">
@@ -780,7 +669,7 @@ function ProviderForm({
         <FieldLegend variant="label" className="px-1 text-xs">
           Authentication
         </FieldLegend>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-3">
           <Field label="Auth Type">
             <Select
               value={authType}
@@ -831,29 +720,29 @@ function ProviderForm({
         </div>
       </FieldSet>
 
-      {/* Timeout + Active */}
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Timeout (seconds)">
-          <Input
-            type="number"
-            min={1}
-            max={3600}
-            value={timeout}
-            onChange={(e) =>
-              onTimeoutChange(Math.max(1, Number(e.target.value) || 60))
-            }
-            disabled={isGlobal}
-            className="max-w-[120px]"
-          />
-        </Field>
-        <Field label="Active">
-          <Switch
-            checked={isActive}
-            onCheckedChange={onIsActiveChange}
-            disabled={isGlobal}
-          />
-        </Field>
-      </div>
+      {/* Timeout */}
+      <Field label="Timeout (seconds)">
+        <Input
+          type="number"
+          min={1}
+          max={3600}
+          value={timeout}
+          onChange={(e) =>
+            onTimeoutChange(Math.max(1, Number(e.target.value) || 60))
+          }
+          disabled={isGlobal}
+          className="max-w-[120px]"
+        />
+      </Field>
+      {/* Active */}
+      <Field label="Active">
+        <Switch
+          checked={isActive}
+          onCheckedChange={onIsActiveChange}
+          disabled={isGlobal}
+
+        />
+      </Field>
 
       {children}
     </div>

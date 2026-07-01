@@ -32,6 +32,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { JobStatusBadge } from "@/components/inference/JobStatusBadge";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ProjectContext } from "./_app.projects.$projectId";
@@ -256,19 +257,17 @@ export default function ProjectInferencePage() {
         const pct = progressPercent(job);
         return (
           <div className="flex items-center gap-2 min-w-[140px]">
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all",
-                  job.status === "failed"
-                    ? "bg-red-500"
-                    : job.status === "completed"
-                      ? "bg-green-500"
-                      : "bg-blue-500"
-                )}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
+            <Progress
+              value={pct}
+              className={cn(
+                "h-1.5 flex-1 [&>div]:transition-all",
+                job.status === "failed" && "[&>div]:bg-red-500",
+                job.status === "completed" && "[&>div]:bg-green-500",
+                job.status !== "failed" &&
+                  job.status !== "completed" &&
+                  "[&>div]:bg-blue-500"
+              )}
+            />
             <span className="text-xs text-muted-foreground tabular-nums w-16 text-right">
               {job.completed_items}/{job.total_items}
             </span>

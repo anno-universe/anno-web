@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, type ImgHTMLAttributes } from "react";
 import { apiGetBlob } from "@/api/client";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Props extends ImgHTMLAttributes<HTMLImageElement> {
   src: string;
@@ -43,8 +44,8 @@ export function AuthenticatedImage({ src, alt, ...imgProps }: Props) {
 
   if (!objectUrl) {
     return (
-      <div
-        className="animate-pulse rounded-md bg-muted"
+      <Skeleton
+        className="rounded-md"
         style={{ width: imgProps.width, height: imgProps.height }}
       />
     );

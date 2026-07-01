@@ -1,6 +1,12 @@
 import { Outlet, Navigate } from "react-router";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@/components/ui/card";
 
 export default function AuthLayout() {
   const hasToken = !!localStorage.getItem("anno_access");
@@ -10,14 +16,16 @@ export default function AuthLayout() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted">
-      <div className="w-full max-w-sm rounded-lg border bg-card p-6 shadow-sm">
-        <h1 className="mb-6 text-center text-xl font-semibold tracking-tight text-foreground">
-          Anno
-        </h1>
-        <Suspense fallback={<LoadingSpinner />}>
-          <Outlet />
-        </Suspense>
-      </div>
+      <Card className="w-full max-w-sm shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-center text-xl">Anno</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={<LoadingSpinner />}>
+            <Outlet />
+          </Suspense>
+        </CardContent>
+      </Card>
     </div>
   );
 }

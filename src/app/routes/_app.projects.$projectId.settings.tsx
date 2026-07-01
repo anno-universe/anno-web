@@ -21,6 +21,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardFooter,
+} from "@/components/ui/card";
+import {
   Field,
   FieldGroup,
   FieldLabel,
@@ -267,25 +274,29 @@ export default function ProjectSettingsPage() {
       </form>
 
       {isSupervisor && (
-        <div className="mt-10 rounded-md border border-destructive/30 p-4">
-          <h3 className="text-sm font-semibold text-destructive">
-            Danger Zone
-          </h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Once you delete a project, there is no going back. All images,
-            annotations, and member data will be permanently removed.
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDeleteConfirm(true)}
-            disabled={deleting}
-            className="mt-3 border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive"
-          >
-            {deleting ? "Deleting…" : "Delete Project"}
-          </Button>
-        </div>
+        <Card className="mt-10 border-destructive/30">
+          <CardHeader>
+            <CardTitle className="text-sm text-destructive">
+              Danger Zone
+            </CardTitle>
+            <CardDescription>
+              Once you delete a project, there is no going back. All images,
+              annotations, and member data will be permanently removed.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={deleting}
+              className="border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive"
+            >
+              {deleting ? "Deleting…" : "Delete Project"}
+            </Button>
+          </CardFooter>
+        </Card>
       )}
 
       <ConfirmDialog

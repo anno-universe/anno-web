@@ -7,6 +7,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { TagOutput, ImageTagOutput } from "@/types/tag";
 
@@ -81,14 +86,20 @@ export function ImageTagBar({
             {t.tag_display_name || t.tag_name}
           </span>
           {!disabled && canRemove && (
-            <button
-              type="button"
-              onClick={() => onRemoveTag(t.tag_id)}
-              className="ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full hover:bg-black/10"
-              title={`Remove "${t.tag_display_name || t.tag_name}" tag`}
-            >
-              <X className="h-2.5 w-2.5" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => onRemoveTag(t.tag_id)}
+                  className="ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full hover:bg-black/10"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Remove "{t.tag_display_name || t.tag_name}" tag</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </span>
         );

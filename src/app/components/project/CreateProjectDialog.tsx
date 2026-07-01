@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { LabelMappingEditor } from "./LabelMappingEditor";
 import { AnnotationSettings } from "./AnnotationSettings";
 import type {
@@ -130,7 +131,8 @@ export function CreateProjectDialog({ open, onClose }: Props) {
             </Field>
           </FieldGroup>
 
-          <DialogFooter className="shrink-0 border-t px-6 py-4">
+          <Separator />
+          <DialogFooter className="shrink-0 px-6 py-4">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>

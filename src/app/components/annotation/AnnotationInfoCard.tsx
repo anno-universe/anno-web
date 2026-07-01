@@ -12,6 +12,11 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
+import {
   getLabelColor,
   getLabelName,
   labelOptionsFromMapping,
@@ -193,7 +198,6 @@ export function AnnotationInfoCard({
           document.body.style.userSelect = "none";
         }}
         className="-ml-1 flex h-5 w-4 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
-        title="Drag panel"
         aria-label="Drag annotation panel"
       >
         <GripVertical className="h-3.5 w-3.5" />
@@ -286,16 +290,22 @@ export function AnnotationInfoCard({
             disabled={saving}
             className="w-20 rounded border bg-background px-1.5 py-0.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
           />
-          <button
-            onClick={() =>
-              onLabelChange(manual === "" ? null : Number(manual))
-            }
-            disabled={saving}
-            className="flex h-5 w-5 items-center justify-center rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            title="Set label"
-          >
-            <Check className="h-3 w-3" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() =>
+                  onLabelChange(manual === "" ? null : Number(manual))
+                }
+                disabled={saving}
+                className="flex h-5 w-5 items-center justify-center rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                <Check className="h-3 w-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Set label</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       )}
 
@@ -312,40 +322,15 @@ export function AnnotationInfoCard({
 
       {/* Save — draft mode. Always visible — the freshly-drawn shape is unsaved by definition. */}
       {isDraft && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onSave?.();
-          }}
-          disabled={saving}
-          className="ml-0.5 flex h-5 items-center gap-1 rounded px-1.5 text-[10px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          title="Save annotation (Enter)"
-        >
-          {saving ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <Check className="h-3 w-3" />
-          )}
-          Save
-        </button>
-      )}
-
-      {/* Save / Revert — edit mode only. Save hidden until something changes. */}
-      {isEdit && (
-        <>
-          {(isDirty || saving) && (
+        <Tooltip>
+          <TooltipTrigger asChild>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onSave?.();
               }}
-              disabled={!canSave}
-              className={`ml-0.5 flex h-5 items-center gap-1 rounded px-1.5 text-[10px] font-medium transition-colors ${
-                canSave
-                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                  : "bg-muted text-muted-foreground cursor-not-allowed"
-              }`}
-              title="Save changes (Enter)"
+              disabled={saving}
+              className="ml-0.5 flex h-5 items-center gap-1 rounded px-1.5 text-[10px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {saving ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -354,39 +339,88 @@ export function AnnotationInfoCard({
               )}
               Save
             </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Save annotation (Enter)</p>
+          </TooltipContent>
+        </Tooltip>
+      )}
+
+      {/* Save / Revert — edit mode only. Save hidden until something changes. */}
+      {isEdit && (
+        <>
+          {(isDirty || saving) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSave?.();
+                  }}
+                  disabled={!canSave}
+                  className={`ml-0.5 flex h-5 items-center gap-1 rounded px-1.5 text-[10px] font-medium transition-colors ${
+                    canSave
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "bg-muted text-muted-foreground cursor-not-allowed"
+                  }`}
+                >
+                  {saving ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Check className="h-3 w-3" />
+                  )}
+                  Save
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Save changes (Enter)</p>
+              </TooltipContent>
+            </Tooltip>
           )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onRevert?.();
-            }}
-            disabled={!canRevert}
-            className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-            title="Revert (Esc)"
-          >
-            <RotateCcw className="h-3 w-3" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRevert?.();
+                }}
+                disabled={!canRevert}
+                className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                <RotateCcw className="h-3 w-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Revert (Esc)</p>
+            </TooltipContent>
+          </Tooltip>
         </>
       )}
 
       {/* Delete (existing) / Discard (draft) */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        disabled={!canDelete}
-        className="ml-0.5 flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-        title={
-          isDraft
-            ? "Discard (don't save)"
-            : saving
-              ? "Saving…"
-              : "Delete annotation"
-        }
-      >
-        <Trash2 className="h-3 w-3" />
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            disabled={!canDelete}
+            className="ml-0.5 flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>
+            {isDraft
+              ? "Discard (don't save)"
+              : saving
+                ? "Saving…"
+                : "Delete annotation"}
+          </p>
+        </TooltipContent>
+      </Tooltip>
     </div>
   );
 }
