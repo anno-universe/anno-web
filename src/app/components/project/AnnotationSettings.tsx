@@ -1,4 +1,13 @@
-import { Switch } from "@/components/shared/Switch";
+import { Switch } from "@/components/ui/switch";
+import {
+  Field,
+  FieldContent,
+  FieldTitle,
+  FieldDescription,
+  FieldSet,
+  FieldLegend,
+  FieldGroup,
+} from "@/components/ui/field";
 import {
   PROJECT_CONFIG_VERSION,
   type MetaInfoConfigV2,
@@ -29,49 +38,47 @@ export function AnnotationSettings({ value, onChange, disabled }: Props) {
     value.keypoint_enabled === true; // default off
 
   return (
-    <div className="space-y-4">
+    <FieldGroup className="gap-4">
       {/* ---- Box ---- */}
-      <fieldset className="rounded-md border px-4 py-3">
-        <legend className="px-1 text-sm font-medium text-foreground">
+      <FieldSet className="rounded-md border px-4 py-3">
+        <FieldLegend variant="label" className="px-1">
           Box annotation
-        </legend>
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className="text-sm text-foreground">Rotation handle</p>
-            <p className="text-xs text-muted-foreground">
+        </FieldLegend>
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldTitle>Rotation handle</FieldTitle>
+            <FieldDescription>
               Show rotate and scale handles on selected boxes so annotators can
               adjust the angle.
-            </p>
-          </div>
+            </FieldDescription>
+          </FieldContent>
           <Switch
             checked={boxRotation}
             onCheckedChange={(on) => setMeta("box_rotation_enabled", on)}
             disabled={disabled}
           />
-        </div>
-      </fieldset>
+        </Field>
+      </FieldSet>
 
       {/* ---- Keypoint ---- */}
-      <fieldset className="rounded-md border px-4 py-3">
-        <legend className="px-1 text-sm font-medium text-foreground">
+      <FieldSet className="rounded-md border px-4 py-3">
+        <FieldLegend variant="label" className="px-1">
           Keypoint annotation
-        </legend>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-sm text-foreground">Show keypoint tool</p>
-              <p className="text-xs text-muted-foreground">
-                Let annotators place keypoint markers on images.
-              </p>
-            </div>
-            <Switch
-              checked={keypointEnabled}
-              onCheckedChange={(on) => setMeta("keypoint_enabled", on)}
-              disabled={disabled}
-            />
-          </div>
-        </div>
-      </fieldset>
-    </div>
+        </FieldLegend>
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldTitle>Show keypoint tool</FieldTitle>
+            <FieldDescription>
+              Let annotators place keypoint markers on images.
+            </FieldDescription>
+          </FieldContent>
+          <Switch
+            checked={keypointEnabled}
+            onCheckedChange={(on) => setMeta("keypoint_enabled", on)}
+            disabled={disabled}
+          />
+        </Field>
+      </FieldSet>
+    </FieldGroup>
   );
 }

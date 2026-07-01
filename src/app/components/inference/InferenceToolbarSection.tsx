@@ -1,4 +1,5 @@
 import { Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   onClick: () => void;
@@ -11,14 +12,16 @@ export function InferenceToolbarSection({ onClick }: Props) {
       <div className="my-2 h-px w-8 bg-border" />
 
       {/* Trigger button */}
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         onClick={onClick}
-        className="flex h-9 w-9 items-center justify-center rounded-md text-amber-500 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+        className="text-amber-500 hover:bg-amber-50 hover:text-amber-600"
         title="AI Inference"
         aria-label="Open AI inference panel"
       >
-        <Sparkles className="h-[18px] w-[18px]" />
-      </button>
+        <Sparkles />
+      </Button>
     </>
   );
 }

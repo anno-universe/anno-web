@@ -14,9 +14,25 @@ import {
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { Modal } from "@/components/shared/Modal";
+import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { JobStatusBadge } from "@/components/inference/JobStatusBadge";
-import { useToastStore } from "@/stores/toastStore";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ProjectContext } from "./_app.projects.$projectId";
 import type { InferenceProviderOutput } from "@/types/inferenceProvider";
@@ -37,7 +53,6 @@ export default function ProjectInferencePage() {
   const { projectId } = useParams();
   const pid = Number(projectId);
   const { project } = useOutletContext<ProjectContext>();
-  const addToast = useToastStore((s) => s.addToast);
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
@@ -164,16 +179,10 @@ export default function ProjectInferencePage() {
     try {
       const job = await startBatchInference(pid, selectedProviderId);
       setShowStartModal(false);
-      addToast(
-        `Inference job #${job.id} started for ${job.total_items} images.`,
-        "success"
-      );
+      toast.success(`Inference job #${job.id} started for ${job.total_items} images.`);
       await fetchJobs();
     } catch (err: unknown) {
-      addToast(
-        err instanceof Error ? err.message : "Failed to start inference job",
-        "error"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to start inference job");
     } finally {
       setStarting(false);
     }
@@ -187,12 +196,9 @@ export default function ProjectInferencePage() {
       await cancelInferenceJob(pid, cancelTarget.id);
       setCancelTarget(null);
       await fetchJobs();
-      addToast("Cancellation requested.", "success");
+      toast.success("Cancellation requested.");
     } catch (err: unknown) {
-      addToast(
-        err instanceof Error ? err.message : "Failed to cancel job",
-        "error"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to cancel job");
     } finally {
       setCancelling(false);
     }
@@ -206,12 +212,9 @@ export default function ProjectInferencePage() {
       await retryInferenceJob(pid, retryTarget.id);
       setRetryTarget(null);
       await fetchJobs();
-      addToast("Job retry queued.", "success");
+      toast.success("Job retry queued.");
     } catch (err: unknown) {
-      addToast(
-        err instanceof Error ? err.message : "Failed to retry job",
-        "error"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to retry job");
     } finally {
       setRetrying(false);
     }
@@ -300,28 +303,31 @@ export default function ProjectInferencePage() {
       render: (job) => (
         <div className="flex gap-1">
           {ACTIVE_JOB_STATUSES.includes(job.status) && (
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="xs"
               onClick={(e) => {
                 e.stopPropagation();
                 setCancelTarget(job);
               }}
-              className="rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50"
+              className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-700"
             >
               Cancel
-            </button>
+            </Button>
           )}
           {job.status === "failed" && (
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="xs"
               onClick={(e) => {
                 e.stopPropagation();
                 setRetryTarget(job);
               }}
-              className="rounded border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted"
             >
               Retry
-            </button>
+            </Button>
           )}
         </div>
       ),
@@ -341,13 +347,14 @@ export default function ProjectInferencePage() {
           </p>
         </div>
         {isSupervisor && (
-          <button
+          <Button
             type="button"
+            size="sm"
             onClick={openStartModal}
-            className="ml-4 shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            className="ml-4 shrink-0"
           >
             Start New Job
-          </button>
+          </Button>
         )}
       </div>
 
@@ -372,70 +379,74 @@ export default function ProjectInferencePage() {
       )}
 
       {/* Start job modal */}
-      <Modal
+      <Dialog
         open={showStartModal}
-        title="Start Inference Job"
-        onClose={() => setShowStartModal(false)}
+        onOpenChange={(next) => {
+          if (!next) setShowStartModal(false);
+        }}
       >
-        <p className="text-sm text-muted-foreground mb-4">
-          This will run the selected provider against ALL images currently in
-          this project. To target a subset, create a separate project.
-        </p>
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <label
-              htmlFor="inferProvider"
-              className="text-xs font-medium text-foreground"
-            >
-              Provider
-            </label>
-            {providersLoading ? (
-              <LoadingSpinner />
-            ) : (
-              <select
-                id="inferProvider"
-                value={selectedProviderId ?? ""}
-                onChange={(e) =>
-                  setSelectedProviderId(
-                    e.target.value ? Number(e.target.value) : null
-                  )
-                }
-                className="w-full rounded-md border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="" disabled>
-                  Select a provider…
-                </option>
-                {providers
-                  .filter((p) => p.is_active)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                      {p.is_global ? " (Global)" : ""}
-                    </option>
-                  ))}
-              </select>
-            )}
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start Inference Job</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This will run the selected provider against ALL images currently in
+              this project. To target a subset, create a separate project.
+            </p>
+            <Field>
+              <FieldLabel htmlFor="inferProvider">Provider</FieldLabel>
+              {providersLoading ? (
+                <LoadingSpinner />
+              ) : (
+                <Select
+                  value={
+                    selectedProviderId != null
+                      ? String(selectedProviderId)
+                      : undefined
+                  }
+                  onValueChange={(v) =>
+                    setSelectedProviderId(v ? Number(v) : null)
+                  }
+                >
+                  <SelectTrigger id="inferProvider" className="w-full">
+                    <SelectValue placeholder="Select a provider…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {providers
+                        .filter((p) => p.is_active)
+                        .map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            {p.name}
+                            {p.is_global ? " (Global)" : ""}
+                          </SelectItem>
+                        ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
           </div>
-          <div className="flex gap-2">
-            <button
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowStartModal(false)}
+              disabled={starting}
+            >
+              Cancel
+            </Button>
+            <Button
               type="button"
               onClick={handleStart}
               disabled={starting || !selectedProviderId}
-              className="flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {starting ? <LoadingSpinner /> : "Start"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowStartModal(false)}
-              disabled={starting}
-              className="rounded-md border px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Modal>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Cancel confirmation */}
       <ConfirmDialog

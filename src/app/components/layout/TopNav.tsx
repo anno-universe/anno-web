@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { useAuthStore } from "@/stores/authStore";
+import { Button } from "@/components/ui/button";
 
 export function TopNav() {
   const { user, logout } = useAuthStore();
@@ -20,12 +21,14 @@ export function TopNav() {
             {user.username}
           </span>
         )}
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={logout}
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="h-auto px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
         >
           Logout
-        </button>
+        </Button>
       </div>
     </header>
   );

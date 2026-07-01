@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface Row {
   id: number;
@@ -71,31 +73,33 @@ export function MetaInfoEditor({ value, onChange, disabled }: Props) {
       )}
       {rows.map((row) => (
         <div key={row.id} className="flex items-center gap-2">
-          <input
+          <Input
             type="text"
             value={row.key}
             onChange={(e) => update(row.id, { key: e.target.value })}
             disabled={disabled}
             placeholder="keypoint_class_count"
-            className="flex-1 rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1"
           />
-          <input
+          <Input
             type="text"
             value={row.value}
             onChange={(e) => update(row.id, { value: e.target.value })}
             disabled={disabled}
             placeholder="17"
-            className="flex-1 rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1"
           />
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             onClick={() => remove(row.id)}
             disabled={disabled}
-            className="flex h-9 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+            className="h-9 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             aria-label="Remove field"
           >
-            <Trash2 className="h-4 w-4" />
-          </button>
+            <Trash2 />
+          </Button>
         </div>
       ))}
       {rows.length === 0 && (
@@ -104,14 +108,16 @@ export function MetaInfoEditor({ value, onChange, disabled }: Props) {
         </p>
       )}
       {!disabled && (
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={add}
-          className="flex items-center gap-1.5 rounded-md border border-dashed px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="border-dashed text-xs text-muted-foreground"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus />
           Add field
-        </button>
+        </Button>
       )}
     </div>
   );

@@ -2,7 +2,7 @@ import { Outlet, Navigate } from "react-router";
 import { Suspense, useEffect } from "react";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
-import { ToastContainer } from "@/components/shared/ToastContainer";
+import { Toaster } from "@/components/ui/sonner";
 import { useAuthStore } from "@/stores/authStore";
 import { TopNav } from "@/components/layout/TopNav";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
@@ -39,7 +39,7 @@ export default function AppLayout() {
             </Suspense>
           </main>
         </BreadcrumbProvider>
-        <ToastContainer />
+        <Toaster position="bottom-right" />
       </div>
     </ErrorBoundary>
   );

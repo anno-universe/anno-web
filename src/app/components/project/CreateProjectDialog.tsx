@@ -2,6 +2,23 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { createProject } from "@/api/projects";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldDescription,
+} from "@/components/ui/field";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { LabelMappingEditor } from "./LabelMappingEditor";
 import { AnnotationSettings } from "./AnnotationSettings";
 import type {
@@ -28,8 +45,6 @@ export function CreateProjectDialog({ open, onClose }: Props) {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  if (!open) return null;
-
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
@@ -54,98 +69,77 @@ export function CreateProjectDialog({ open, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-50 flex max-h-[90vh] w-full max-w-lg flex-col rounded-lg border bg-card shadow-sm">
-        <h2 className="shrink-0 border-b px-6 py-4 text-lg font-semibold text-foreground">
-          Create Project
-        </h2>
-        <form
-          onSubmit={handleSubmit}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          <div className="flex-1 space-y-5 overflow-auto px-6 py-4">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-lg">
+        <DialogHeader className="shrink-0 border-b px-6 py-4">
+          <DialogTitle>Create Project</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <FieldGroup className="flex-1 gap-5 overflow-auto px-6 py-4">
             {error && (
-              <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </div>
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
-            <div className="space-y-2">
-              <label
-                htmlFor="pname"
-                className="text-sm font-medium text-foreground"
-              >
+            <Field>
+              <FieldLabel htmlFor="pname">
                 Name <span className="text-destructive">*</span>
-              </label>
-              <input
+              </FieldLabel>
+              <Input
                 id="pname"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 required
               />
-            </div>
-            <div className="space-y-2">
-              <label
-                htmlFor="pdesc"
-                className="text-sm font-medium text-foreground"
-              >
-                Description
-              </label>
-              <textarea
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="pdesc">Description</FieldLabel>
+              <Textarea
                 id="pdesc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
-            </div>
+            </Field>
 
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">
-                Label mapping
-              </p>
-              <p className="text-xs text-muted-foreground">
+            <Field>
+              <FieldLabel>Label mapping</FieldLabel>
+              <FieldDescription>
                 The classes annotators assign. Stored as name → numeric id.
-              </p>
+              </FieldDescription>
               <LabelMappingEditor
                 value={labelMapping.labels}
                 onChange={(labels) =>
                   setLabelMapping({ version: 2, labels })
                 }
               />
-            </div>
+            </Field>
 
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">
-                Annotation settings
-              </p>
-              <p className="text-xs text-muted-foreground">
+            <Field>
+              <FieldLabel>Annotation settings</FieldLabel>
+              <FieldDescription>
                 Configure which tools and options are available to annotators.
-              </p>
+              </FieldDescription>
               <AnnotationSettings value={metaInfo} onChange={setMetaInfo} />
-            </div>
-          </div>
+            </Field>
+          </FieldGroup>
 
-          <div className="flex shrink-0 justify-end gap-3 border-t px-6 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
-            >
+          <DialogFooter className="shrink-0 border-t px-6 py-4">
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" disabled={submitting}>
               {submitting ? <LoadingSpinner /> : "Create"}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

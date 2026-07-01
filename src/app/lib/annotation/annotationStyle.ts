@@ -230,7 +230,7 @@ function keypointStyles(
         }),
         text: new Text({
           text: String(i + 1),
-          font: "bold 11px ui-monospace, monospace",
+          font: "bold 11px 'Noto Sans SC', system-ui, sans-serif",
           offsetY: -13,
           fill: new Fill({ color: pointColor }),
           stroke: new Stroke({ color: "white", width: 3 }),
@@ -307,7 +307,7 @@ export function keypointDraftStyleFn(feature: Feature): Style {
     }),
     text: new Text({
       text: String(index + 1),
-      font: "bold 11px ui-monospace, monospace",
+      font: "bold 11px 'Noto Sans SC', system-ui, sans-serif",
       offsetY: -13,
       fill: new Fill({ color }),
       stroke: new Stroke({ color: "white", width: 3 }),

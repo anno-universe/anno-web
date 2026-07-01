@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { TagPicker } from "./TagPicker";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import type { TagOutput, ImageTagOutput } from "@/types/tag";
 
 interface Props {
@@ -88,25 +95,33 @@ export function ImageTagBar({
       })}
 
       {!disabled && (
-        <button
-          type="button"
-          onClick={() => setPickerOpen(!pickerOpen)}
-          className={`inline-flex h-5 w-5 items-center justify-center rounded-full border border-dashed text-muted-foreground transition-colors hover:border-foreground hover:text-foreground ${
-            pickerOpen ? "border-foreground text-foreground" : ""
-          }`}
-          title="Add tag"
-        >
-          <Plus className="h-3 w-3" />
-        </button>
-      )}
-
-      {pickerOpen && (
-        <TagPicker
-          projectTags={projectTags}
-          appliedTagIds={appliedTagIds}
-          onSelect={onApplyTag}
-          onClose={() => setPickerOpen(false)}
-        />
+        <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className={cn(
+                "size-5 rounded-full border-dashed text-muted-foreground hover:text-foreground [&_svg]:size-3",
+                pickerOpen && "border-foreground text-foreground"
+              )}
+              title="Add tag"
+            >
+              <Plus />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            className="w-56 p-0"
+          >
+            <TagPicker
+              projectTags={projectTags}
+              appliedTagIds={appliedTagIds}
+              onSelect={onApplyTag}
+              onClose={() => setPickerOpen(false)}
+            />
+          </PopoverContent>
+        </Popover>
       )}
     </div>
   );

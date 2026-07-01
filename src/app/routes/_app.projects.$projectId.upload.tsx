@@ -3,7 +3,16 @@ import { Link, useParams, useOutletContext } from "react-router";
 import { CheckCircle, AlertCircle, X, Loader2 } from "lucide-react";
 import { uploadImage } from "@/api/images";
 import { ImageUploadZone } from "@/components/image/ImageUploadZone";
-import { useToastStore } from "@/stores/toastStore";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
 import type { ProjectContext } from "./_app.projects.$projectId";
 import type { Image2DOutput } from "@/types/image";
 
@@ -88,7 +97,6 @@ export default function UploadPage() {
   const { projectId } = useParams();
   const pid = Number(projectId);
   const { project, refreshProject } = useOutletContext<ProjectContext>();
-  const addToast = useToastStore((s) => s.addToast);
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
@@ -188,9 +196,9 @@ export default function UploadPage() {
       const ok = current.filter((f) => f.status === "success").length;
       const fail = current.filter((f) => f.status === "error").length;
       if (fail > 0) {
-        addToast(`${ok} uploaded, ${fail} failed`, "error");
+        toast.error(`${ok} uploaded, ${fail} failed`);
       } else {
-        addToast(`${ok} image${ok !== 1 ? "s" : ""} uploaded`, "success");
+        toast.success(`${ok} image${ok !== 1 ? "s" : ""} uploaded`);
       }
       return current;
     });
@@ -301,13 +309,15 @@ export default function UploadPage() {
               {/* Remove button (pending or error only) */}
               {(entry.status === "pending" || entry.status === "error") &&
                 !uploading && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={() => handleRemove(entry.id)}
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="size-6 text-muted-foreground"
                     title="Remove"
                   >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+                    <X />
+                  </Button>
                 )}
             </div>
           ))}
@@ -321,42 +331,50 @@ export default function UploadPage() {
             <span>
               Showing {pageStart}–{pageEnd} of {files.length}
             </span>
-            <label className="flex items-center gap-1">
+            <label className="flex items-center gap-1.5">
               <span>Rows:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
+              <Select
+                value={String(pageSize)}
+                onValueChange={(v) => {
+                  setPageSize(Number(v));
                   setCurrentOffset(0);
                 }}
-                className="rounded border bg-background px-1.5 py-0.5 text-xs"
               >
-                {[10, 20, 50, 100].map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger size="sm" className="h-7">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {[10, 20, 50, 100].map((size) => (
+                      <SelectItem key={size} value={String(size)}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </label>
           </div>
           <div className="flex items-center gap-1">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage <= 1}
-              className="rounded border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
             >
               Previous
-            </button>
+            </Button>
             <span className="px-2 text-xs text-muted-foreground">
               Page {currentPage} of {totalPages}
             </span>
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage >= totalPages}
-              className="rounded border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
             >
               Next
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -365,28 +383,23 @@ export default function UploadPage() {
       {hasFiles && !batchComplete && (
         <div className="mt-4 flex items-center gap-3">
           {canUpload && (
-            <button
-              onClick={handleUploadAll}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
+            <Button onClick={handleUploadAll}>
               Upload {pendingCount} remaining
-            </button>
+            </Button>
           )}
           {uploading && (
-            <button
-              onClick={handleCancel}
-              className="rounded-md border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
-            >
+            <Button variant="outline" onClick={handleCancel}>
               Cancel
-            </button>
+            </Button>
           )}
           {(successCount > 0 || errorCount > 0) && !uploading && (
-            <button
+            <Button
+              variant="outline"
               onClick={handleClearCompleted}
-              className="rounded-md border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="text-muted-foreground"
             >
               Clear completed
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -410,18 +423,12 @@ export default function UploadPage() {
             )}
           </div>
           <div className="mt-3 flex items-center gap-3">
-            <Link
-              to={`/projects/${pid}/images`}
-              className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              View Images
-            </Link>
-            <button
-              onClick={handleClearCompleted}
-              className="rounded-md border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-            >
+            <Button asChild size="sm">
+              <Link to={`/projects/${pid}/images`}>View Images</Link>
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleClearCompleted}>
               Upload More
-            </button>
+            </Button>
           </div>
         </div>
       )}

@@ -6,6 +6,7 @@ import { AuthenticatedImage } from "@/components/image/AuthenticatedImage";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { Button } from "@/components/ui/button";
 import {
   PaginatedTable,
   type Column,
@@ -94,13 +95,14 @@ function imageColumns(
       header: "",
       className: "w-24",
       render: (img) => (
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="xs"
           onClick={() => onAnnotate(img.id)}
-          className="cursor-pointer rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
         >
           Annotate
-        </button>
+        </Button>
       ),
     },
   ];
@@ -266,8 +268,10 @@ export default function ImagesPage() {
             );
           })}
           {tagFilter.length > 0 && (
-            <button
+            <Button
               type="button"
+              variant="link"
+              size="xs"
               onClick={() => {
                 setSearchParams(
                   (prev) => {
@@ -279,10 +283,10 @@ export default function ImagesPage() {
                   { replace: true },
                 );
               }}
-              className="text-xs text-muted-foreground hover:text-foreground hover:underline ml-1"
+              className="ml-1 text-muted-foreground hover:text-foreground"
             >
               Clear
-            </button>
+            </Button>
           )}
         </div>
       )}

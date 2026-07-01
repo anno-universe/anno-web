@@ -9,9 +9,29 @@ import {
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { Modal } from "@/components/shared/Modal";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { ProviderSection } from "@/components/inference/ProviderSection";
-import { useToastStore } from "@/stores/toastStore";
+import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import type { APIKeyOutput, APIKeyCreateInput } from "@/types/apiKey";
 import type { ProjectContext } from "./_app.projects.$projectId";
 
@@ -48,7 +68,6 @@ export default function ProjectDeveloperPage() {
   const { projectId } = useParams();
   const id = Number(projectId);
   const { project } = useOutletContext<ProjectContext>();
-  const addToast = useToastStore((s) => s.addToast);
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
@@ -107,12 +126,9 @@ export default function ProjectDeveloperPage() {
       setNewKeyName("");
       setNewKeyExpires("");
       await fetchKeys();
-      addToast("API key created.", "success");
+      toast.success("API key created.");
     } catch (err: unknown) {
-      addToast(
-        err instanceof Error ? err.message : "Failed to create API key",
-        "error"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to create API key");
     } finally {
       setCreating(false);
     }
@@ -162,14 +178,11 @@ export default function ProjectDeveloperPage() {
       if (Object.keys(patch).length > 0) {
         await updateApiKey(id, keyId, patch);
         await fetchKeys();
-        addToast("API key updated.", "success");
+        toast.success("API key updated.");
       }
       cancelEdit();
     } catch (err: unknown) {
-      addToast(
-        err instanceof Error ? err.message : "Failed to update API key",
-        "error"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to update API key");
     } finally {
       setSaving(false);
     }
@@ -183,12 +196,9 @@ export default function ProjectDeveloperPage() {
       await deleteApiKey(id, deleteTarget.id);
       setDeleteTarget(null);
       await fetchKeys();
-      addToast("API key deleted.", "success");
+      toast.success("API key deleted.");
     } catch (err: unknown) {
-      addToast(
-        err instanceof Error ? err.message : "Failed to delete API key",
-        "error"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to delete API key");
     } finally {
       setDeleting(false);
     }
@@ -218,82 +228,77 @@ export default function ProjectDeveloperPage() {
             header.
           </p>
         </div>
-        <button
+        <Button
           type="button"
+          size="sm"
           onClick={() => setShowCreateForm(true)}
           disabled={showCreateForm}
-          className="ml-4 shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="ml-4 shrink-0"
         >
           Create API Key
-        </button>
+        </Button>
       </div>
 
       {/* Create modal */}
-      <Modal
+      <Dialog
         open={showCreateForm}
-        title="Create API Key"
-        onClose={() => {
-          setShowCreateForm(false);
-          setNewKeyName("");
-          setNewKeyExpires("");
+        onOpenChange={(next) => {
+          if (!next) {
+            setShowCreateForm(false);
+            setNewKeyName("");
+            setNewKeyExpires("");
+          }
         }}
       >
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <label
-              htmlFor="keyName"
-              className="text-xs font-medium text-foreground"
-            >
-              Name
-            </label>
-            <input
-              id="keyName"
-              type="text"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-              placeholder="e.g. inference-worker-1"
-              className="w-full rounded-md border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create API Key</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <Field>
+              <FieldLabel htmlFor="keyName">Name</FieldLabel>
+              <Input
+                id="keyName"
+                type="text"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                placeholder="e.g. inference-worker-1"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="keyExpires">Expires (optional)</FieldLabel>
+              <Input
+                id="keyExpires"
+                type="datetime-local"
+                value={newKeyExpires}
+                onChange={(e) => setNewKeyExpires(e.target.value)}
+                className="max-w-xs"
+              />
+            </Field>
           </div>
-          <div className="space-y-1">
-            <label
-              htmlFor="keyExpires"
-              className="text-xs font-medium text-foreground"
-            >
-              Expires (optional)
-            </label>
-            <input
-              id="keyExpires"
-              type="datetime-local"
-              value={newKeyExpires}
-              onChange={(e) => setNewKeyExpires(e.target.value)}
-              className="w-full max-w-xs rounded-md border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
+          <DialogFooter>
+            <Button
               type="button"
-              onClick={handleCreate}
-              disabled={creating || !newKeyName.trim()}
-              className="flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {creating ? <LoadingSpinner /> : "Create"}
-            </button>
-            <button
-              type="button"
+              variant="outline"
               onClick={() => {
                 setShowCreateForm(false);
                 setNewKeyName("");
                 setNewKeyExpires("");
               }}
               disabled={creating}
-              className="rounded-md border px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-50"
             >
               Cancel
-            </button>
-          </div>
-        </div>
-      </Modal>
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreate}
+              disabled={creating || !newKeyName.trim()}
+            >
+              {creating ? <LoadingSpinner /> : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Error */}
       {error && <ErrorAlert message={error} onRetry={fetchKeys} />}
@@ -309,92 +314,76 @@ export default function ProjectDeveloperPage() {
           project's API.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50 text-left">
-                <th className="px-3 py-2 font-medium text-foreground">Name</th>
-                <th className="px-3 py-2 font-medium text-foreground">
-                  Prefix
-                </th>
-                <th className="px-3 py-2 font-medium text-foreground">
-                  Status
-                </th>
-                <th className="px-3 py-2 font-medium text-foreground">
-                  Expires
-                </th>
-                <th className="px-3 py-2 font-medium text-foreground">
-                  Last Used
-                </th>
-                <th className="px-3 py-2 font-medium text-foreground">
-                  Created
-                </th>
-                <th className="px-3 py-2 font-medium text-foreground">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50 hover:bg-muted/50">
+                <TableHead className="px-3">Name</TableHead>
+                <TableHead className="px-3">Prefix</TableHead>
+                <TableHead className="px-3">Status</TableHead>
+                <TableHead className="px-3">Expires</TableHead>
+                <TableHead className="px-3">Last Used</TableHead>
+                <TableHead className="px-3">Created</TableHead>
+                <TableHead className="px-3">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {keys.map((key) => (
-                <tr
-                  key={key.id}
-                  className="border-b last:border-b-0 hover:bg-muted/30"
-                >
+                <TableRow key={key.id} className="hover:bg-muted/30">
                   {/* Name */}
-                  <td className="px-3 py-2 text-foreground">
+                  <TableCell className="px-3 text-foreground">
                     {editingId === key.id ? (
-                      <input
+                      <Input
                         type="text"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
-                        className="w-full rounded border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="h-8"
                       />
                     ) : (
                       key.name
                     )}
-                  </td>
+                  </TableCell>
 
                   {/* Prefix */}
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                  <TableCell className="px-3 font-mono text-xs text-muted-foreground">
                     {key.prefix}
                     {"…"}
-                  </td>
+                  </TableCell>
 
                   {/* Status */}
-                  <td className="px-3 py-2">
+                  <TableCell className="px-3">
                     {editingId === key.id ? (
                       <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="checkbox"
+                        <Switch
                           checked={editIsActive}
-                          onChange={(e) => setEditIsActive(e.target.checked)}
-                          className="rounded border-muted-foreground"
+                          onCheckedChange={setEditIsActive}
                         />
                         <span className="text-xs">
                           {editIsActive ? "Active" : "Inactive"}
                         </span>
                       </label>
                     ) : (
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      <Badge
+                        variant="outline"
+                        className={cn(
                           key.is_active
                             ? "bg-green-100 text-green-700"
                             : "bg-muted text-muted-foreground"
-                        }`}
+                        )}
                       >
                         {key.is_active ? "Active" : "Inactive"}
-                      </span>
+                      </Badge>
                     )}
-                  </td>
+                  </TableCell>
 
                   {/* Expires */}
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <TableCell className="px-3 text-muted-foreground">
                     {editingId === key.id ? (
-                      <input
+                      <Input
                         type="datetime-local"
                         value={editExpires}
                         onChange={(e) => setEditExpires(e.target.value)}
-                        className="rounded border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="h-8 w-auto"
                       />
                     ) : key.expires_at ? (
                       <span className="text-xs">
@@ -405,91 +394,98 @@ export default function ProjectDeveloperPage() {
                         Never
                       </span>
                     )}
-                  </td>
+                  </TableCell>
 
                   {/* Last Used */}
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                  <TableCell className="px-3 text-xs text-muted-foreground">
                     {formatDate(key.last_used_at)}
-                  </td>
+                  </TableCell>
 
                   {/* Created */}
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                  <TableCell className="px-3 text-xs text-muted-foreground">
                     {formatDate(key.created_at)}
-                  </td>
+                  </TableCell>
 
                   {/* Actions */}
-                  <td className="px-3 py-2">
+                  <TableCell className="px-3">
                     {editingId === key.id ? (
                       <div className="flex gap-1">
-                        <button
+                        <Button
                           type="button"
+                          size="xs"
                           onClick={() => handleUpdate(key.id)}
                           disabled={saving}
-                          className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                         >
                           {saving ? "…" : "Save"}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
+                          variant="outline"
+                          size="xs"
                           onClick={cancelEdit}
                           disabled={saving}
-                          className="rounded border px-2 py-1 text-xs text-foreground hover:bg-muted disabled:opacity-50"
                         >
                           Cancel
-                        </button>
+                        </Button>
                       </div>
                     ) : (
                       <div className="flex gap-1">
-                        <button
+                        <Button
                           type="button"
+                          variant="outline"
+                          size="xs"
                           onClick={() => startEdit(key)}
-                          className="rounded border px-2 py-1 text-xs text-foreground hover:bg-muted"
                         >
                           Edit
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
+                          variant="outline"
+                          size="xs"
                           onClick={() => setDeleteTarget(key)}
-                          className="rounded border border-destructive/30 px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+                          className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
                         >
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
 
       {/* Token display modal — one-time display after creation */}
-      <Modal
+      <Dialog
         open={createdToken !== null}
-        title="API Key Created"
-        size="lg"
-        onClose={closeTokenModal}
+        onOpenChange={(next) => {
+          if (!next) closeTokenModal();
+        }}
       >
-        <p className="text-sm text-destructive font-medium">
-          Copy this key now. You won't be able to see it again.
-        </p>
-        <div className="mt-4 flex items-center gap-2">
-          <code className="flex-1 break-all rounded-md bg-muted px-3 py-2 text-xs font-mono text-foreground select-all">
-            {createdToken}
-          </code>
-          <CopyButton text={createdToken ?? ""} />
-        </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={closeTokenModal}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Done
-          </button>
-        </div>
-      </Modal>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>API Key Created</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-destructive font-medium">
+              Copy this key now. You won't be able to see it again.
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 break-all rounded-md bg-muted px-3 py-2 text-xs font-mono text-foreground select-all">
+                {createdToken}
+              </code>
+              <CopyButton text={createdToken ?? ""} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" onClick={closeTokenModal}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Inference provider configuration */}
       <ProviderSection projectId={id} isSupervisor={isSupervisor} />
@@ -524,13 +520,9 @@ function CopyButton({ text }: { text: string }) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="shrink-0 rounded-md border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted"
-    >
+    <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
       {copied ? "Copied!" : "Copy"}
-    </button>
+    </Button>
   );
 }
 

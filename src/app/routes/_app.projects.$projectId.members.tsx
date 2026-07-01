@@ -10,13 +10,33 @@ import { searchUsers } from "@/api/users";
 import { PaginatedTable } from "@/components/shared/PaginatedTable";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
-import { Modal } from "@/components/shared/Modal";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Field,
+  FieldLabel,
+} from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   MemberRoleSelect,
   MemberRemoveButton,
 } from "@/components/project/MemberRow";
 import { useConfirm } from "@/components/shared/ConfirmDialog";
-import { useToastStore } from "@/stores/toastStore";
+import { toast } from "sonner";
 import { formatDateTime } from "@/lib/utils/date";
 import type { Column, PaginationState } from "@/components/shared/PaginatedTable";
 import type { ProjectMemberOutput } from "@/types/project";
@@ -60,11 +80,12 @@ export default function ProjectMembersPage() {
   const [removingUserId, setRemovingUserId] = useState<number | null>(null);
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  );
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { confirm, ConfirmDialog } = useConfirm();
-  const addToast = useToastStore((s) => s.addToast);
 
   // Fetch members
   const fetchMembers = useCallback(
@@ -161,7 +182,7 @@ export default function ProjectMembersPage() {
     setAddingMember(true);
     try {
       await addMember(id, { user_id: selectedUser.id, role: addRole });
-      addToast(`${selectedUser.username} added as ${addRole}`, "success");
+      toast.success(`${selectedUser.username} added as ${addRole}`);
       fetchMembers(pagination.offset, pagination.limit);
       // Reset form
       setSelectedUser(null);
@@ -171,7 +192,7 @@ export default function ProjectMembersPage() {
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : "Failed to add member";
-      addToast(msg, "error");
+      toast.error(msg);
     } finally {
       setAddingMember(false);
     }
@@ -181,12 +202,12 @@ export default function ProjectMembersPage() {
     setRoleUpdatingUserId(userId);
     try {
       await updateMemberRole(id, userId, { role: newRole });
-      addToast("Role updated", "success");
+      toast.success("Role updated");
       fetchMembers(pagination.offset, pagination.limit);
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : "Failed to update role";
-      addToast(msg, "error");
+      toast.error(msg);
     } finally {
       setRoleUpdatingUserId(null);
     }
@@ -206,15 +227,12 @@ export default function ProjectMembersPage() {
     setRemovingUserId(userId);
     try {
       await removeMember(id, userId);
-      addToast(
-        member ? `${member.username} removed` : "Member removed",
-        "success"
-      );
+      toast.success(member ? `${member.username} removed` : "Member removed");
       fetchMembers(pagination.offset, pagination.limit);
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : "Failed to remove member";
-      addToast(msg, "error");
+      toast.error(msg);
     } finally {
       setRemovingUserId(null);
     }
@@ -294,7 +312,8 @@ export default function ProjectMembersPage() {
           <h2 className="text-lg font-semibold text-foreground">
             Members ({pagination.count})
           </h2>
-          <button
+          <Button
+            size="sm"
             onClick={() => {
               setShowAddForm(true);
               // Reset form state
@@ -303,121 +322,149 @@ export default function ProjectMembersPage() {
               setSelectedUser(null);
               setSearchError("");
             }}
-            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             Add Member
-          </button>
+          </Button>
         </div>
       )}
 
       {/* Add member modal */}
-      <Modal
+      <Dialog
         open={showAddForm}
-        title="Add Member"
-        size="lg"
-        onClose={() => {
-          setShowAddForm(false);
-          setSearchQuery("");
-          setSearchResults([]);
-          setSelectedUser(null);
-          setSearchError("");
+        onOpenChange={(next) => {
+          if (!next) {
+            setShowAddForm(false);
+            setSearchQuery("");
+            setSearchResults([]);
+            setSelectedUser(null);
+            setSearchError("");
+          }
         }}
       >
-        <div className="space-y-3">
-          {/* Search input */}
-          <div ref={searchContainerRef} className="relative">
-            <label className="text-xs font-medium text-muted-foreground block mb-1">
-              Search users by username
-            </label>
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Type a username..."
-              disabled={addingMember}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-            />
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Member</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            {/* Search input */}
+            <div ref={searchContainerRef} className="relative">
+              <Field>
+                <FieldLabel htmlFor="member-search">
+                  Search users by username
+                </FieldLabel>
+                <Input
+                  id="member-search"
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  placeholder="Type a username..."
+                  disabled={addingMember}
+                />
+              </Field>
 
-            {/* Search results dropdown */}
-            {searchQuery && !selectedUser && (
-              <div className="absolute z-10 mt-1 w-full rounded-md border bg-card shadow-lg max-h-48 overflow-y-auto">
-                {searchingUsers && (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">
-                    Searching...
-                  </div>
-                )}
-                {!searchingUsers &&
-                  searchResults.length > 0 &&
-                  searchResults.map((user) => (
-                    <button
-                      key={user.id}
-                      type="button"
-                      onClick={() => handleSelectUser(user)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex flex-col"
-                    >
-                      <span className="font-medium">{user.username}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {user.email}
-                      </span>
-                    </button>
-                  ))}
-                {!searchingUsers &&
-                  searchResults.length === 0 && (
+              {/* Search results */}
+              {searchQuery && !selectedUser && (
+                <div className="mt-1 w-full rounded-md border bg-card shadow-lg max-h-48 overflow-y-auto">
+                  {searchingUsers && (
                     <div className="px-3 py-2 text-sm text-muted-foreground">
-                      No users found
+                      Searching...
                     </div>
                   )}
-              </div>
-            )}
-          </div>
+                  {!searchingUsers &&
+                    searchResults.length > 0 &&
+                    searchResults.map((user) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => handleSelectUser(user)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex flex-col"
+                      >
+                        <span className="font-medium">{user.username}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {user.email}
+                        </span>
+                      </button>
+                    ))}
+                  {!searchingUsers &&
+                    searchResults.length === 0 && (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">
+                        No users found
+                      </div>
+                    )}
+                </div>
+              )}
+            </div>
 
-          {/* Role + Add */}
-          {selectedUser && (
-            <>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">
-                  Role
-                </label>
-                <select
+            {/* Role selection (only after user is selected) */}
+            {selectedUser && (
+              <Field>
+                <FieldLabel htmlFor="member-role">Role</FieldLabel>
+                <Select
                   value={addRole}
-                  onChange={(e) =>
-                    setAddRole(e.target.value as "worker" | "supervisor")
+                  onValueChange={(v) =>
+                    setAddRole(v as "worker" | "supervisor")
                   }
                   disabled={addingMember}
-                  className="rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 >
-                  <option value="worker">Worker</option>
-                  <option value="supervisor">Supervisor</option>
-                </select>
-              </div>
+                  <SelectTrigger id="member-role" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="worker">Worker</SelectItem>
+                      <SelectItem value="supervisor">Supervisor</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
 
-              <p className="text-xs text-muted-foreground">
+            {searchError && (
+              <p className="text-xs text-destructive">{searchError}</p>
+            )}
+
+            {/* Selection summary */}
+            {selectedUser && (
+              <p className="text-sm text-muted-foreground">
                 Adding{" "}
                 <span className="font-medium text-foreground">
                   {selectedUser.username}
-                </span>{" "}
-                ({selectedUser.email}) as{" "}
-                <span className="font-medium text-foreground">{addRole}</span>
+                </span>
+                {selectedUser.email && <> ({selectedUser.email})</>} as{" "}
+                <span className="font-medium text-foreground capitalize">
+                  {addRole}
+                </span>
               </p>
-            </>
-          )}
-
-          {searchError && (
-            <p className="text-xs text-destructive">{searchError}</p>
-          )}
-
-          {selectedUser && (
-            <button
-              onClick={handleAddMember}
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowAddForm(false);
+                setSearchQuery("");
+                setSearchResults([]);
+                setSelectedUser(null);
+                setSearchError("");
+              }}
               disabled={addingMember}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              {addingMember ? "Adding..." : `Add as ${addRole}`}
-            </button>
-          )}
-        </div>
-      </Modal>
+              Cancel
+            </Button>
+            {selectedUser && (
+              <Button
+                type="button"
+                onClick={handleAddMember}
+                disabled={addingMember}
+              >
+                {addingMember ? "Adding..." : `Add as ${addRole}`}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Member list error */}
       {error && (

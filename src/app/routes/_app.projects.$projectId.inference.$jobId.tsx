@@ -10,7 +10,8 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { JobStatusBadge } from "@/components/inference/JobStatusBadge";
-import { useToastStore } from "@/stores/toastStore";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { useSetBreadcrumb } from "@/lib/breadcrumb";
 import { cn } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
@@ -34,7 +35,6 @@ export default function ProjectInferenceJobDetailPage() {
   const pid = Number(projectId);
   const jid = Number(jobId);
   const { project } = useOutletContext<ProjectContext>();
-  const addToast = useToastStore((s) => s.addToast);
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
@@ -129,13 +129,10 @@ export default function ProjectInferenceJobDetailPage() {
     try {
       await cancelInferenceJob(pid, jid);
       setCancelTarget(false);
-      addToast("Cancellation requested.", "success");
+      toast.success("Cancellation requested.");
       await fetchJob();
     } catch (err: unknown) {
-      addToast(
-        err instanceof Error ? err.message : "Failed to cancel job",
-        "error"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to cancel job");
     } finally {
       setCancelling(false);
     }
@@ -147,13 +144,10 @@ export default function ProjectInferenceJobDetailPage() {
     try {
       await retryInferenceJob(pid, jid);
       setRetryTarget(false);
-      addToast("Job retry queued.", "success");
+      toast.success("Job retry queued.");
       await fetchJob();
     } catch (err: unknown) {
-      addToast(
-        err instanceof Error ? err.message : "Failed to retry job",
-        "error"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to retry job");
     } finally {
       setRetrying(false);
     }
@@ -210,22 +204,25 @@ export default function ProjectInferenceJobDetailPage() {
           <div className="flex items-center gap-2">
             {isSupervisor &&
               ACTIVE_JOB_STATUSES.includes(job.status) && (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => setCancelTarget(true)}
-                  className="rounded border border-amber-300 px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50"
+                  className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-700"
                 >
                   Cancel
-                </button>
+                </Button>
               )}
             {isSupervisor && job.status === "failed" && (
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => setRetryTarget(true)}
-                className="rounded border px-3 py-1 text-xs font-medium text-foreground hover:bg-muted"
               >
                 Retry
-              </button>
+              </Button>
             )}
           </div>
         </div>

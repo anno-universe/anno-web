@@ -1,4 +1,22 @@
 import { LoadingSpinner } from "./LoadingSpinner";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export interface Column<T> {
   key: string;
@@ -50,59 +68,54 @@ export function PaginatedTable<T>({
   return (
     <div className="rounded-lg border bg-card">
       {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b bg-muted/50">
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  className={`px-4 py-3 text-left text-xs font-medium text-muted-foreground ${col.className ?? ""}`}
-                >
-                  {col.header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="relative">
-            {isLoading && rows.length > 0 && (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-2">
-                  <div className="absolute inset-0 flex items-center justify-center bg-card/60">
-                    <LoadingSpinner />
-                  </div>
-                </td>
-              </tr>
-            )}
-            {rows.length === 0 && !isLoading ? (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-4 py-12 text-center text-sm text-muted-foreground"
-                >
-                  No items to display.
-                </td>
-              </tr>
-            ) : (
-              rows.map((row) => (
-                <tr
-                  key={getRowKey(row)}
-                  className="border-b last:border-b-0 transition-colors hover:bg-muted/30"
-                >
-                  {columns.map((col) => (
-                    <td
-                      key={col.key}
-                      className={`px-4 py-3 text-sm ${col.className ?? ""}`}
-                    >
-                      {col.render(row)}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/50 hover:bg-muted/50">
+            {columns.map((col) => (
+              <TableHead
+                key={col.key}
+                className={cn("px-4 text-xs text-muted-foreground", col.className)}
+              >
+                {col.header}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody className="relative">
+          {isLoading && rows.length > 0 && (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={columns.length} className="px-4 py-2">
+                <div className="absolute inset-0 flex items-center justify-center bg-card/60">
+                  <LoadingSpinner />
+                </div>
+              </TableCell>
+            </TableRow>
+          )}
+          {rows.length === 0 && !isLoading ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell
+                colSpan={columns.length}
+                className="px-4 py-12 text-center text-sm text-muted-foreground"
+              >
+                No items to display.
+              </TableCell>
+            </TableRow>
+          ) : (
+            rows.map((row) => (
+              <TableRow key={getRowKey(row)} className="hover:bg-muted/30">
+                {columns.map((col) => (
+                  <TableCell
+                    key={col.key}
+                    className={cn("px-4 py-3 text-sm", col.className)}
+                  >
+                    {col.render(row)}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
 
       {/* Pagination controls */}
       <div className="flex items-center justify-between border-t px-4 py-3">
@@ -112,39 +125,47 @@ export function PaginatedTable<T>({
               ? "No results"
               : `Showing ${start}–${end} of ${count}`}
           </span>
-          <label className="flex items-center gap-1">
+          <label className="flex items-center gap-1.5">
             <span>Rows:</span>
-            <select
-              value={limit}
-              onChange={(e) => changePageSize(Number(e.target.value))}
-              className="rounded border bg-background px-1.5 py-0.5 text-xs"
+            <Select
+              value={String(limit)}
+              onValueChange={(v) => changePageSize(Number(v))}
             >
-              {PAGE_SIZES.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger size="sm" className="h-7">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {PAGE_SIZES.map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </label>
         </div>
         <div className="flex items-center gap-1">
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => goToPage(currentPage - 1)}
             disabled={currentPage <= 1}
-            className="rounded border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
           >
             Previous
-          </button>
+          </Button>
           <span className="px-2 text-xs text-muted-foreground">
             Page {currentPage} of {totalPages || 1}
           </span>
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => goToPage(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className="rounded border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
           >
             Next
-          </button>
+          </Button>
         </div>
       </div>
     </div>
