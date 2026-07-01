@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldLabel } from "@/components/ui/field";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Table,
   TableBody,
@@ -79,14 +80,14 @@ export default function ProjectDeveloperPage() {
   // Create state
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
-  const [newKeyExpires, setNewKeyExpires] = useState("");
+  const [newKeyExpires, setNewKeyExpires] = useState<Date | undefined>(undefined);
   const [creating, setCreating] = useState(false);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
 
   // Edit state
   const [editingKey, setEditingKey] = useState<APIKeyOutput | null>(null);
   const [editName, setEditName] = useState("");
-  const [editExpires, setEditExpires] = useState("");
+  const [editExpires, setEditExpires] = useState<Date | undefined>(undefined);
   const [editIsActive, setEditIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -118,13 +119,15 @@ export default function ProjectDeveloperPage() {
     try {
       const input: APIKeyCreateInput = { name: newKeyName.trim() };
       if (newKeyExpires) {
-        input.expires_at = new Date(newKeyExpires).toISOString();
+        const endOfDay = new Date(newKeyExpires);
+        endOfDay.setHours(23, 59, 59, 999);
+        input.expires_at = endOfDay.toISOString();
       }
       const result = await createApiKey(id, input);
       setCreatedToken(result.token);
       setShowCreateForm(false);
       setNewKeyName("");
-      setNewKeyExpires("");
+      setNewKeyExpires(undefined);
       await fetchKeys();
       toast.success("API key created.");
     } catch (err: unknown) {
@@ -143,13 +146,13 @@ export default function ProjectDeveloperPage() {
     setEditingKey(key);
     setEditName(key.name);
     setEditIsActive(key.is_active);
-    setEditExpires(key.expires_at ? toLocalDatetime(key.expires_at) : "");
+    setEditExpires(key.expires_at ? new Date(key.expires_at) : undefined);
   }
 
   function cancelEdit() {
     setEditingKey(null);
     setEditName("");
-    setEditExpires("");
+    setEditExpires(undefined);
     setEditIsActive(true);
   }
 
@@ -161,9 +164,12 @@ export default function ProjectDeveloperPage() {
       if (editName.trim() && editName.trim() !== editingKey.name) {
         patch.name = editName.trim();
       }
-      const newExpiry = editExpires
-        ? new Date(editExpires).toISOString()
-        : null;
+      let newExpiry: string | null = null;
+      if (editExpires) {
+        const endOfDay = new Date(editExpires);
+        endOfDay.setHours(23, 59, 59, 999);
+        newExpiry = endOfDay.toISOString();
+      }
       if (newExpiry !== editingKey.expires_at) {
         patch.expires_at = newExpiry;
       }
@@ -241,7 +247,7 @@ export default function ProjectDeveloperPage() {
           if (!next) {
             setShowCreateForm(false);
             setNewKeyName("");
-            setNewKeyExpires("");
+            setNewKeyExpires(undefined);
           }
         }}
       >
@@ -261,13 +267,12 @@ export default function ProjectDeveloperPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="keyExpires">Expires (optional)</FieldLabel>
-              <Input
-                id="keyExpires"
-                type="datetime-local"
-                value={newKeyExpires}
-                onChange={(e) => setNewKeyExpires(e.target.value)}
-                className="max-w-xs"
+              <FieldLabel>Expires (optional)</FieldLabel>
+              <DatePicker
+                date={newKeyExpires}
+                onDateChange={setNewKeyExpires}
+                placeholder="No expiration"
+                disabled={creating}
               />
             </Field>
           </div>
@@ -278,7 +283,7 @@ export default function ProjectDeveloperPage() {
               onClick={() => {
                 setShowCreateForm(false);
                 setNewKeyName("");
-                setNewKeyExpires("");
+                setNewKeyExpires(undefined);
               }}
               disabled={creating}
             >
@@ -329,13 +334,12 @@ export default function ProjectDeveloperPage() {
               </label>
             </Field>
             <Field>
-              <FieldLabel htmlFor="editKeyExpires">Expires (optional)</FieldLabel>
-              <Input
-                id="editKeyExpires"
-                type="datetime-local"
-                value={editExpires}
-                onChange={(e) => setEditExpires(e.target.value)}
-                className="max-w-xs"
+              <FieldLabel>Expires (optional)</FieldLabel>
+              <DatePicker
+                date={editExpires}
+                onDateChange={setEditExpires}
+                placeholder="No expiration"
+                disabled={saving}
               />
             </Field>
           </div>
@@ -535,12 +539,3 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-/** Convert ISO 8601 to datetime-local input value. */
-function toLocalDatetime(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}`
-  );
-}

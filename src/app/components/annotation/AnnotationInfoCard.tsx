@@ -9,7 +9,7 @@ import {
   GripVertical,
   Loader2,
 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   Tooltip,
@@ -20,6 +20,7 @@ import {
   getLabelColor,
   getLabelName,
   labelOptionsFromMapping,
+  stableColor,
 } from "@/lib/utils/labelMapping";
 
 const typeIcons: Record<string, typeof Square> = {
@@ -48,6 +49,9 @@ interface Props {
   annotation: CardAnnotation | null;
   labelMapping: Record<string, unknown>;
   labelOptions?: Array<{ value: number; label: string; color: string }>;
+  /** Labels already in use across existing annotations on this image.
+   *  Used as dropdown options when no label_mapping is configured. */
+  usedLabels?: number[];
   mode: InfoCardMode;
   /** Whether a save API call is in flight. Disables all buttons. */
   saving?: boolean;
@@ -69,6 +73,7 @@ export function AnnotationInfoCard({
   annotation,
   labelMapping,
   labelOptions,
+  usedLabels,
   mode,
   saving = false,
   isDirty = false,
@@ -79,7 +84,6 @@ export function AnnotationInfoCard({
 }: Props) {
   // Label dropdown state — user opens manually
   const [labelOpen, setLabelOpen] = useState(false);
-  const [manual, setManual] = useState("");
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [dropdownPos, setDropdownPos] = useState<{
     left: number;
@@ -160,6 +164,23 @@ export function AnnotationInfoCard({
     };
   }, []);
 
+  // Build fallback options from labels already in use on this image.
+  // MUST be before the early return — React hooks must run in the same
+  // order on every render, otherwise "Rendered fewer hooks than expected".
+  const usedLabelOptions = useMemo(() => {
+    const set = new Set<number>();
+    if (usedLabels) {
+      for (const l of usedLabels) {
+        if (l != null) set.add(l);
+      }
+    }
+    // Always include the current annotation's label.
+    if (annotation?.label != null) set.add(annotation.label);
+    return Array.from(set)
+      .sort((a, b) => a - b)
+      .map((v) => ({ value: v, label: String(v), color: stableColor(v) }));
+  }, [usedLabels, annotation?.label]);
+
   if (!annotation) return null;
 
   const Icon = typeIcons[annotation.annotation_type] ?? CircleDot;
@@ -167,6 +188,7 @@ export function AnnotationInfoCard({
   const labelColor = getLabelColor(annotation.label, labelMapping);
   const options = labelOptions ?? labelOptionsFromMapping(labelMapping);
   const hasMapping = options.length > 0;
+
   const isEdit = mode === "edit";
   const isDraft = mode === "draft";
   const canSave = isEdit && isDirty && !saving;
@@ -273,39 +295,58 @@ export function AnnotationInfoCard({
             )}
         </div>
       ) : (
-        /* No mapping: numeric input fallback (edit/draft only) */
-        <div className="flex items-center gap-1">
-          <input
-            type="number"
-            value={manual}
-            onChange={(e) => setManual(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                onLabelChange(manual === "" ? null : Number(manual));
-              }
+        /* No mapping: dropdown from used labels + custom number entry (edit/draft only) */
+        <div className="relative">
+          <button
+            ref={labelButtonRef}
+            onClick={() => {
+              if (!saving) setLabelOpen((o) => !o);
             }}
-            placeholder={
-              annotation.label != null ? String(annotation.label) : "label #"
-            }
             disabled={saving}
-            className="w-20 rounded border bg-background px-1.5 py-0.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() =>
-                  onLabelChange(manual === "" ? null : Number(manual))
-                }
-                disabled={saving}
-                className="flex h-5 w-5 items-center justify-center rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="flex items-center gap-0.5 rounded px-1 py-0.5 text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          >
+            <span className="max-w-[140px] truncate font-medium">
+              {annotation.label == null && isDraft ? "Pick label" : labelName}
+            </span>
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          </button>
+
+          {labelOpen && dropdownPos &&
+            createPortal(
+              <div
+                data-label-menu
+                className="fixed z-[9999] max-h-48 overflow-auto rounded-md border bg-popover py-1 shadow-md"
+                style={{
+                  left: dropdownPos.left,
+                  top: dropdownPos.top,
+                  width: dropdownPos.width,
+                }}
               >
-                <Check className="h-3 w-3" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Set label</p>
-            </TooltipContent>
-          </Tooltip>
+                {usedLabelOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => {
+                      onLabelChange(opt.value);
+                      setLabelOpen(false);
+                    }}
+                    className={`w-full px-3 py-1.5 text-left text-[11px] hover:bg-muted ${
+                      annotation.label === opt.value
+                        ? "bg-muted font-medium text-foreground"
+                        : "text-foreground"
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full border"
+                        style={{ backgroundColor: opt.color }}
+                      />
+                      {opt.label}
+                    </span>
+                  </button>
+                ))}
+              </div>,
+              document.body
+            )}
         </div>
       )}
 

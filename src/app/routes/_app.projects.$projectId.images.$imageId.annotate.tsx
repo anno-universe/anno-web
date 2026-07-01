@@ -718,6 +718,16 @@ export default function AnnotatePage() {
     project?.label_mapping as Record<string, unknown>
   );
   const labelOptions = labelOptionsFromMapping(labelMapping);
+
+  // Unique labels used across all annotations on this image (for dropdown when no mapping).
+  const usedLabels = useMemo(() => {
+    const set = new Set<number>();
+    for (const a of annotations) {
+      if (a.label != null) set.add(a.label);
+    }
+    return [...set].sort((a, b) => a - b);
+  }, [annotations]);
+
   const metaInfo = upgradeMetaInfoConfig(
     project?.meta_info as Record<string, unknown>
   );
@@ -882,6 +892,7 @@ export default function AnnotatePage() {
                 }}
                 labelMapping={labelMapping}
                 labelOptions={labelOptions}
+                usedLabels={usedLabels}
                 mode="draft"
                 saving={state.saving}
                 onSave={handleSaveDraft}
@@ -893,6 +904,7 @@ export default function AnnotatePage() {
                 annotation={displayAnnotation}
                 labelMapping={labelMapping}
                 labelOptions={labelOptions}
+                usedLabels={usedLabels}
                 mode={infoCardMode}
                 saving={state.type === "editing" ? state.saving : false}
                 isDirty={isDirty}
