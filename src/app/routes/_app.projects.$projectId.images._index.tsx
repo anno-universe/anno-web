@@ -130,7 +130,9 @@ export default function ImagesPage() {
   const limit =
     parseInt(searchParams.get("limit") || String(DEFAULT_LIMIT), 10) ||
     DEFAULT_LIMIT;
-  const tagFilter = searchParams.getAll("tag");
+  const tagFilter = (searchParams.get("tag") || "")
+    .split(",")
+    .filter(Boolean);
 
   // Server-provided pagination metadata (count comes from API)
   const [count, setCount] = useState(0);
@@ -158,7 +160,7 @@ export default function ImagesPage() {
         limit: fetchLimit,
         offset: fetchOffset,
       };
-      if (tags && tags.length > 0) params.tag = tags;
+      if (tags && tags.length > 0) params.tag = tags.join(",");
       const imageData = await getImages(pid, params);
       setImages(imageData.items);
       setCount(imageData.count);
@@ -239,15 +241,22 @@ export default function ImagesPage() {
                   setSearchParams(
                     (prev) => {
                       const next = new URLSearchParams(prev);
-                      const current = next.getAll("tag");
-                      next.delete("tag");
+                      const current = (next.get("tag") || "")
+                        .split(",")
+                        .filter(Boolean);
                       if (selected) {
-                        current
-                          .filter((t) => t !== tag.name)
-                          .forEach((t) => next.append("tag", t));
+                        const updated = current.filter(
+                          (t) => t !== tag.name,
+                        );
+                        if (updated.length > 0) {
+                          next.set("tag", updated.join(","));
+                        } else {
+                          next.delete("tag");
+                        }
                       } else {
-                        [...current, tag.name].forEach((t) =>
-                          next.append("tag", t),
+                        next.set(
+                          "tag",
+                          [...current, tag.name].join(","),
                         );
                       }
                       next.delete("offset"); // reset to first page
