@@ -28,9 +28,9 @@ const ProjectDeveloperPage = lazy(
 const ProjectInferencePage = lazy(
   () => import("@/routes/_app.projects.$projectId.inference")
 );
-const ProjectInferenceJobDetailPage = lazy(
+const ProjectInferenceRunDetailPage = lazy(
   () =>
-    import("@/routes/_app.projects.$projectId.inference.$jobId")
+    import("@/routes/_app.projects.$projectId.inference.$runId")
 );
 const UploadPage = lazy(
   () => import("@/routes/_app.projects.$projectId.upload")
@@ -109,9 +109,9 @@ export const router = createBrowserRouter([
             handle: { breadcrumb: "Inference" } as any,
           },
           {
-            path: "inference/:jobId",
-            Component: ProjectInferenceJobDetailPage,
-            handle: { dynamicKey: "inferenceJob" } as any,
+            path: "inference/:runId",
+            Component: ProjectInferenceRunDetailPage,
+            handle: { dynamicKey: "inferenceRun" } as any,
           },
         ],
       },

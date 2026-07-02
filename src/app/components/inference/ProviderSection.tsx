@@ -524,7 +524,7 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
         title="Delete Inference Provider"
         message={
           deleteTarget
-            ? `Are you sure you want to delete the inference provider "${deleteTarget.name}"? Jobs that were using this provider will not be affected, but no new jobs can be started with it.`
+            ? `Are you sure you want to delete the inference provider "${deleteTarget.name}"? Runs that were using this provider will not be affected, but no new runs can be started with it.`
             : ""
         }
         confirmLabel={deleting ? "Deleting…" : "Delete"}

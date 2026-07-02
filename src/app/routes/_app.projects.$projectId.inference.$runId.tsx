@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useOutletContext, Link } from "react-router";
 import {
-  getInferenceJob,
-  cancelInferenceJob,
-  retryInferenceJob,
-} from "@/api/inferenceJobs";
+  getInferenceRun,
+  cancelInferenceRun,
+  retryInferenceRun,
+} from "@/api/inferenceRuns";
 import { getInferenceProviders } from "@/api/inferenceProviders";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { JobStatusBadge } from "@/components/inference/JobStatusBadge";
+import { RunStatusBadge } from "@/components/inference/RunStatusBadge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -32,23 +32,23 @@ import { cn } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import type { ProjectContext } from "./_app.projects.$projectId";
 import type { InferenceProviderOutput } from "@/types/inferenceProvider";
-import type { JobDetailOutput } from "@/types/inferenceJob";
-import { ACTIVE_JOB_STATUSES, TERMINAL_JOB_STATUSES } from "@/types/inferenceJob";
+import type { RunDetailOutput } from "@/types/inferenceRun";
+import { ACTIVE_RUN_STATUSES, TERMINAL_RUN_STATUSES } from "@/types/inferenceRun";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString();
 }
 
-function progressPercent(job: JobDetailOutput): number {
-  if (job.total_items === 0) return 0;
-  return Math.round((job.completed_items / job.total_items) * 100);
+function progressPercent(run: RunDetailOutput): number {
+  if (run.total_items === 0) return 0;
+  return Math.round((run.completed_items / run.total_items) * 100);
 }
 
-export default function ProjectInferenceJobDetailPage() {
-  const { projectId, jobId } = useParams();
+export default function ProjectInferenceRunDetailPage() {
+  const { projectId, runId } = useParams();
   const pid = Number(projectId);
-  const jid = Number(jobId);
+  const rid = Number(runId);
   const { project } = useOutletContext<ProjectContext>();
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
@@ -56,13 +56,13 @@ export default function ProjectInferenceJobDetailPage() {
   if (!isSupervisor) {
     return (
       <div className="rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-        Your role is {project.my_role ?? "none"}. Inference job details are only
+        Your role is {project.my_role ?? "none"}. Inference run details are only
         available to supervisors.
       </div>
     );
   }
 
-  const [job, setJob] = useState<JobDetailOutput | null>(null);
+  const [run, setRun] = useState<RunDetailOutput | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -87,20 +87,20 @@ export default function ProjectInferenceJobDetailPage() {
 
   // Set breadcrumb
   useSetBreadcrumb("project", project.name);
-  const jobLabel = job ? `Job #${job.id}` : `Job #${jid}`;
-  useSetBreadcrumb("inferenceJob", jobLabel);
+  const runLabel = run ? `Run #${run.id}` : `Run #${rid}`;
+  useSetBreadcrumb("inferenceRun", runLabel);
 
-  const fetchJob = useCallback(async () => {
+  const fetchRun = useCallback(async () => {
     try {
-      const detail = await getInferenceJob(pid, jid);
-      setJob(detail);
+      const detail = await getInferenceRun(pid, rid);
+      setRun(detail);
       setError("");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load job");
+      setError(err instanceof Error ? err.message : "Failed to load run");
     } finally {
       setLoading(false);
     }
-  }, [pid, jid]);
+  }, [pid, rid]);
 
   const fetchProviders = useCallback(async () => {
     try {
@@ -112,13 +112,13 @@ export default function ProjectInferenceJobDetailPage() {
   }, [pid]);
 
   useEffect(() => {
-    fetchJob();
+    fetchRun();
     fetchProviders();
-  }, [fetchJob, fetchProviders]);
+  }, [fetchRun, fetchProviders]);
 
-  // Polling while job is active
+  // Polling while run is active
   useEffect(() => {
-    if (!job || TERMINAL_JOB_STATUSES.includes(job.status)) {
+    if (!run || TERMINAL_RUN_STATUSES.includes(run.status)) {
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
@@ -127,7 +127,7 @@ export default function ProjectInferenceJobDetailPage() {
     }
 
     if (!pollRef.current) {
-      pollRef.current = setInterval(fetchJob, 5000);
+      pollRef.current = setInterval(fetchRun, 5000);
     }
 
     return () => {
@@ -136,18 +136,18 @@ export default function ProjectInferenceJobDetailPage() {
         pollRef.current = null;
       }
     };
-  }, [job, fetchJob]);
+  }, [run, fetchRun]);
 
   // ---- Cancel ----
   async function handleCancel() {
     setCancelling(true);
     try {
-      await cancelInferenceJob(pid, jid);
+      await cancelInferenceRun(pid, rid);
       setCancelTarget(false);
       toast.success("Cancellation requested.");
-      await fetchJob();
+      await fetchRun();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to cancel job");
+      toast.error(err instanceof Error ? err.message : "Failed to cancel run");
     } finally {
       setCancelling(false);
     }
@@ -157,12 +157,12 @@ export default function ProjectInferenceJobDetailPage() {
   async function handleRetry() {
     setRetrying(true);
     try {
-      await retryInferenceJob(pid, jid);
+      await retryInferenceRun(pid, rid);
       setRetryTarget(false);
-      toast.success("Job retry queued.");
-      await fetchJob();
+      toast.success("Run retry queued.");
+      await fetchRun();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to retry job");
+      toast.error(err instanceof Error ? err.message : "Failed to retry run");
     } finally {
       setRetrying(false);
     }
@@ -180,21 +180,21 @@ export default function ProjectInferenceJobDetailPage() {
   if (error) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-12">
-        <ErrorAlert message={error} onRetry={fetchJob} />
+        <ErrorAlert message={error} onRetry={fetchRun} />
       </div>
     );
   }
 
-  if (!job) {
+  if (!run) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-12">
-        <p className="text-sm text-muted-foreground">Job not found.</p>
+        <p className="text-sm text-muted-foreground">Run not found.</p>
       </div>
     );
   }
 
-  const provider = providerMap.get(job.provider_id);
-  const pct = progressPercent(job);
+  const provider = providerMap.get(run.provider_id);
+  const pct = progressPercent(run);
 
   return (
     <div>
@@ -204,20 +204,20 @@ export default function ProjectInferenceJobDetailPage() {
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Back to Inference Jobs
+        Back to Inference Runs
       </Link>
 
-      {/* Job metadata card */}
+      {/* Run metadata card */}
       <Card className="mb-6">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <CardTitle>Job #{job.id}</CardTitle>
-              <JobStatusBadge status={job.status} />
+              <CardTitle>Run #{run.id}</CardTitle>
+              <RunStatusBadge status={run.status} />
             </div>
             <div className="flex items-center gap-2">
               {isSupervisor &&
-                ACTIVE_JOB_STATUSES.includes(job.status) && (
+                ACTIVE_RUN_STATUSES.includes(run.status) && (
                   <Button
                     type="button"
                     variant="outline"
@@ -228,7 +228,7 @@ export default function ProjectInferenceJobDetailPage() {
                     Cancel
                   </Button>
                 )}
-              {isSupervisor && job.status === "failed" && (
+              {isSupervisor && run.status === "failed" && (
                 <Button
                   type="button"
                   variant="outline"
@@ -244,18 +244,18 @@ export default function ProjectInferenceJobDetailPage() {
         <CardContent>
           {/* Details grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-            <Detail label="Provider" value={provider?.name ?? `Provider #${job.provider_id}`} />
-            <Detail label="Created" value={formatDate(job.created_at)} />
-            <Detail label="Started" value={formatDate(job.started_at)} />
-            <Detail label="Finished" value={formatDate(job.finished_at)} />
+            <Detail label="Provider" value={provider?.name ?? `Provider #${run.provider_id}`} />
+            <Detail label="Created" value={formatDate(run.created_at)} />
+            <Detail label="Started" value={formatDate(run.started_at)} />
+            <Detail label="Finished" value={formatDate(run.finished_at)} />
           </div>
 
           {/* Progress bar */}
           <div className="mt-4">
             <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
               <span>
-                {job.completed_items} / {job.total_items} images (
-                {job.failed_items} failed)
+                {run.completed_items} / {run.total_items} images (
+                {run.failed_items} failed)
               </span>
               <span>{pct}%</span>
             </div>
@@ -263,10 +263,10 @@ export default function ProjectInferenceJobDetailPage() {
               value={pct}
               className={cn(
                 "h-2.5 [&>div]:transition-all [&>div]:duration-500",
-                job.status === "failed" && "[&>div]:bg-red-500",
-                job.status === "completed" && "[&>div]:bg-green-500",
-                job.status !== "failed" &&
-                  job.status !== "completed" &&
+                run.status === "failed" && "[&>div]:bg-red-500",
+                run.status === "completed" && "[&>div]:bg-green-500",
+                run.status !== "failed" &&
+                  run.status !== "completed" &&
                   "[&>div]:bg-blue-500"
               )}
             />
@@ -274,29 +274,29 @@ export default function ProjectInferenceJobDetailPage() {
 
           {/* Stats row */}
           <div className="mt-3 flex items-center gap-6 text-xs text-muted-foreground">
-            <span>Annotations created: <strong className="text-foreground">{job.annotations_created}</strong></span>
-            {job.cancel_requested && (
+            <span>Annotations created: <strong className="text-foreground">{run.annotations_created}</strong></span>
+            {run.cancel_requested && (
               <span className="text-amber-600 font-medium">
-                Cancellation requested — worker will stop after current image.
+                Cancellation requested — worker will stop after current task.
               </span>
             )}
           </div>
 
           {/* Error */}
-          {job.error && (
+          {run.error && (
             <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-              {job.error}
+              {run.error}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Items table */}
+      {/* Tasks table */}
       <h3 className="text-sm font-semibold text-foreground mb-3">
-        Items ({job.items.length})
+        Tasks ({run.tasks.length})
       </h3>
-      {job.items.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No items in this job.</p>
+      {run.tasks.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No tasks in this run.</p>
       ) : (
         <div className="rounded-md border">
           <Table>
@@ -318,29 +318,29 @@ export default function ProjectInferenceJobDetailPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {job.items.map((item) => (
+              {run.tasks.map((task) => (
                 <TableRow
-                  key={item.id}
+                  key={task.id}
                 >
                   <TableCell className="px-3 py-2 tabular-nums text-foreground">
                     <Link
-                      to={`/projects/${pid}/images/${item.image_id}/annotate`}
+                      to={`/projects/${pid}/images/${task.image_id}/annotate`}
                       className="text-primary hover:underline"
                     >
-                      {item.image_id}
+                      {task.image_id}
                     </Link>
                   </TableCell>
                   <TableCell className="px-3 py-2">
-                    <JobStatusBadge status={item.status} />
+                    <RunStatusBadge status={task.status} />
                   </TableCell>
                   <TableCell className="px-3 py-2 tabular-nums">
-                    {item.annotations_created}
+                    {task.annotations_created}
                   </TableCell>
                   <TableCell className="px-3 py-2 tabular-nums text-muted-foreground">
-                    {item.attempts}
+                    {task.attempts}
                   </TableCell>
                   <TableCell className="px-3 py-2 max-w-[240px] truncate text-xs text-muted-foreground">
-                    {item.error || "—"}
+                    {task.error || "—"}
                   </TableCell>
                 </TableRow>
               ))}
@@ -352,9 +352,9 @@ export default function ProjectInferenceJobDetailPage() {
       {/* Cancel confirmation */}
       <ConfirmDialog
         open={cancelTarget}
-        title="Cancel Inference Job"
-        message={`Cancel job #${job.id}? The worker will stop after finishing the current image.`}
-        confirmLabel={cancelling ? "Cancelling…" : "Cancel Job"}
+        title="Cancel Inference Run"
+        message={`Cancel run #${run.id}? The worker will stop after finishing the current task.`}
+        confirmLabel={cancelling ? "Cancelling…" : "Cancel Run"}
         onConfirm={handleCancel}
         onCancel={() => setCancelTarget(false)}
       />
@@ -362,9 +362,9 @@ export default function ProjectInferenceJobDetailPage() {
       {/* Retry confirmation */}
       <ConfirmDialog
         open={retryTarget}
-        title="Retry Inference Job"
-        message={`Retry failed items for job #${job.id}? Only failed and skipped items will be re-processed.`}
-        confirmLabel={retrying ? "Retrying…" : "Retry Job"}
+        title="Retry Inference Run"
+        message={`Retry failed tasks for run #${run.id}? Only failed and skipped tasks will be re-processed.`}
+        confirmLabel={retrying ? "Retrying…" : "Retry Run"}
         onConfirm={handleRetry}
         onCancel={() => setRetryTarget(false)}
       />

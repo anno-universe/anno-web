@@ -11,8 +11,8 @@ import {
 } from "@/api/inferenceProviders";
 import {
   startSingleImageInference,
-  getInferenceJob,
-} from "@/api/inferenceJobs";
+  getInferenceRunForImage,
+} from "@/api/inferenceRuns";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import type { InferenceProviderOutput } from "@/types/inferenceProvider";
-import { TERMINAL_JOB_STATUSES } from "@/types/inferenceJob";
+import { TERMINAL_RUN_STATUSES } from "@/types/inferenceRun";
 
 type Phase = "select" | "running" | "success" | "error";
 
@@ -148,7 +148,7 @@ export function InferenceModal({
     if (!selectedProviderId) return;
     setStarting(true);
     try {
-      const job = await startSingleImageInference(
+      const run = await startSingleImageInference(
         projectId,
         imageId,
         selectedProviderId
@@ -157,11 +157,11 @@ export function InferenceModal({
       setStarting(false);
       startedAtRef.current = Date.now();
 
-      // Poll for job completion
+      // Poll for run completion
       pollRef.current = setInterval(async () => {
         try {
-          const j = await getInferenceJob(projectId, job.id);
-          if (TERMINAL_JOB_STATUSES.includes(j.status)) {
+          const r = await getInferenceRunForImage(projectId, imageId, run.id);
+          if (TERMINAL_RUN_STATUSES.includes(r.status)) {
             clearInterval(pollRef.current!);
             pollRef.current = null;
 
@@ -169,12 +169,12 @@ export function InferenceModal({
             const elapsed = Date.now() - startedAtRef.current;
             const minRemaining = Math.max(0, 1000 - elapsed);
             setTimeout(() => {
-              if (j.status === "completed") {
-                setAnnotationsCreated(j.annotations_created);
+              if (r.status === "completed") {
+                setAnnotationsCreated(r.annotations_created);
                 setPhase("success");
-                onComplete(j.annotations_created);
+                onComplete(r.annotations_created);
               } else {
-                setError(j.error || `Inference ${j.status}.`);
+                setError(r.error || `Inference ${r.status}.`);
                 setPhase("error");
               }
             }, minRemaining);
