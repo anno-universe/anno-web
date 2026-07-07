@@ -1024,7 +1024,7 @@ export default function AnnotatePage() {
       />
 
       {/* Main area: Toolbar | Map | SidePanel */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         <AnnotationToolbar
           activeTool={activeTool}
           onToolChange={changeTool}
@@ -1056,64 +1056,62 @@ export default function AnnotatePage() {
           interactiveActive={interactive.isActive}
         />
 
-        <div className="relative flex-1">
-          {/* Interactive SAM toolbar — floats above the map */}
-          {interactive.isActive && (
-            <InteractiveToolbar
-              activeTool={samTool}
-              onToolChange={setSamTool}
-              prompts={
-                "prompts" in interactiveState ? interactiveState.prompts : []
-              }
-              canSend={
-                interactiveState.type === "prompting" &&
-                interactiveState.prompts.length > 0
-              }
-              isLoading={interactiveState.type === "loading"}
-              hasCandidate={interactive.hasCandidate}
-              onSend={handleSamSend}
-              onUndo={handleSamUndo}
-              onDiscard={handleSamDiscard}
-              onCommit={handleSamCommit}
-            />
-          )}
-
-          <AnnotationMap
-            ref={mapRef}
-            imageUrl={getOriginalImageUrl(pid, iid)}
-            width={image.width ?? 800}
-            height={image.height ?? 600}
-            annotations={annotations}
-            selectedAnnotationId={selectedId}
-            editingAnnotationId={editingId}
-            labelMapping={labelMapping}
-            activeTool={effectiveTool}
-            onDrawComplete={handleDrawComplete}
-            onModified={handleModify}
-            onSelect={selectAnnotation}
-            onEditStart={startEditingAnnotation}
-            onCoordinateChange={(x, y) => {
-              setMouseX(x);
-              setMouseY(y);
-            }}
-            onZoomChange={setZoomPercent}
-            onDrawPreview={setDrawPreview}
-            onAnnotationContextMenu={handleAnnotationContextMenu}
-            overlayContainerRef={setOverlayEl}
-            onEditStateChange={(dirty) => {
-              if (dirty) {
-                setGeometryDirty();
-              } else {
-                setGeometryClean();
-              }
-            }}
-            onKeypointDraftChange={setKeypointDraftCount}
-            boxRotationEnabled={boxRotationEnabled}
-            onSamPoint={handleSamPoint}
-            onSamBox={handleSamBox}
-            interactiveActive={interactive.isActive}
+        {/* Interactive SAM toolbar — floats above the map */}
+        {interactive.isActive && (
+          <InteractiveToolbar
+            activeTool={samTool}
+            onToolChange={setSamTool}
+            prompts={
+              "prompts" in interactiveState ? interactiveState.prompts : []
+            }
+            canSend={
+              interactiveState.type === "prompting" &&
+              interactiveState.prompts.length > 0
+            }
+            isLoading={interactiveState.type === "loading"}
+            hasCandidate={interactive.hasCandidate}
+            onSend={handleSamSend}
+            onUndo={handleSamUndo}
+            onDiscard={handleSamDiscard}
+            onCommit={handleSamCommit}
           />
-        </div>
+        )}
+
+        <AnnotationMap
+          ref={mapRef}
+          imageUrl={getOriginalImageUrl(pid, iid)}
+          width={image.width ?? 800}
+          height={image.height ?? 600}
+          annotations={annotations}
+          selectedAnnotationId={selectedId}
+          editingAnnotationId={editingId}
+          labelMapping={labelMapping}
+          activeTool={effectiveTool}
+          onDrawComplete={handleDrawComplete}
+          onModified={handleModify}
+          onSelect={selectAnnotation}
+          onEditStart={startEditingAnnotation}
+          onCoordinateChange={(x, y) => {
+            setMouseX(x);
+            setMouseY(y);
+          }}
+          onZoomChange={setZoomPercent}
+          onDrawPreview={setDrawPreview}
+          onAnnotationContextMenu={handleAnnotationContextMenu}
+          overlayContainerRef={setOverlayEl}
+          onEditStateChange={(dirty) => {
+            if (dirty) {
+              setGeometryDirty();
+            } else {
+              setGeometryClean();
+            }
+          }}
+          onKeypointDraftChange={setKeypointDraftCount}
+          boxRotationEnabled={boxRotationEnabled}
+          onSamPoint={handleSamPoint}
+          onSamBox={handleSamBox}
+          interactiveActive={interactive.isActive}
+        />
 
         {/* Floating info card — portalled into the OL overlay. Mode-driven:
             draft = label picker, edit = commit surface, view = read-only. */}
