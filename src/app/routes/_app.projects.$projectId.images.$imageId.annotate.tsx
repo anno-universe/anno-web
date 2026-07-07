@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, useReducer } from "react";
 import { useParams, useNavigate } from "react-router";
 import { createPortal } from "react-dom";
-import { Pencil, Tag, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { getProject } from "@/api/projects";
 import { getImage, getImages, getOriginalImageUrl } from "@/api/images";
 import {
@@ -28,7 +28,22 @@ import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { AnnotationTopToolBar } from "@/components/annotation/AnnotationTopToolBar";
 import { InferenceModal } from "@/components/inference/InferenceModal";
+import { InteractiveInferenceModal } from "@/components/inference/InteractiveInferenceModal";
+import { InteractiveToolbar } from "@/components/inference/InteractiveToolbar";
 import { useAuthStore } from "@/stores/authStore";
+import {
+  startInteractiveSession,
+  commitInteractiveSession,
+  discardInteractiveSession,
+} from "@/api/interactiveInference";
+import { createServiceClient } from "@/api/interactiveServiceClient";
+import {
+  interactiveReducer,
+  deriveInteractiveState,
+} from "@/lib/annotation/interactiveSession";
+import type { ServiceClient } from "@/api/interactiveServiceClient";
+import type { InteractiveCandidate } from "@/lib/annotation/interactiveSession";
+import type { InteractiveProviderOutput } from "@/types/interactiveInference";
 import type { ContextMenuAction } from "@/components/annotation/ContextMenu";
 import type { InfoCardMode } from "@/components/annotation/AnnotationInfoCard";
 import type { AnnotationMapHandle } from "@/components/annotation/AnnotationMap";
@@ -112,6 +127,25 @@ export default function AnnotatePage() {
   // Inference modal
   const [showInferenceModal, setShowInferenceModal] = useState(false);
 
+  // ---- Interactive SAM session ----
+  const [interactiveState, dispatchInteractive] = useReducer(
+    interactiveReducer,
+    { type: "idle" }
+  );
+  const interactive = deriveInteractiveState(interactiveState);
+  const [showInteractiveModal, setShowInteractiveModal] = useState(false);
+  const [samTool, setSamTool] = useState<"positive_point" | "negative_point" | "box">("positive_point");
+  const serviceClientRef = useRef<ServiceClient | null>(null);
+  const interactiveStateRef = useRef(interactiveState);
+  interactiveStateRef.current = interactiveState;
+  const [samCandidateLabel, setSamCandidateLabel] = useState<number | null>(null);
+
+  // Determine the tool passed to AnnotationMap. When interactive is active,
+  // SAM tool buttons map to the corresponding canvas tool.
+  const effectiveTool: ToolType = interactive.isActive
+    ? (samTool === "box" ? "sam-box" : "sam-point")
+    : activeTool;
+
   // Context menu
   const [ctxMenu, setCtxMenu] = useState<{
     annotationId: number;
@@ -138,6 +172,168 @@ export default function AnnotatePage() {
       }
     }
     return false;
+  }, []);
+
+  // ---- Interactive SAM handlers ----
+
+  const handleOpenInteractiveModal = useCallback(() => {
+    if (blockPendingWork()) return;
+    setShowInteractiveModal(true);
+  }, [blockPendingWork]);
+
+  const handleInteractiveProviderSelected = useCallback(
+    async (provider: InteractiveProviderOutput) => {
+      try {
+        // 1. Start the session (server handshake)
+        const session = await startInteractiveSession(pid, iid, {
+          provider_id: provider.id,
+        });
+
+        dispatchInteractive({ type: "START_SESSION", session });
+
+        // 2. Create the bare service client
+        const svc = createServiceClient({
+          predictUrl: session.predict_url || provider.inference_url,
+          sessionId: session.id,
+          token: session.token,
+          tokenHeader: session.token_header,
+        });
+        serviceClientRef.current = svc;
+
+        // 3. Upload the image to the service (get a seat)
+        try {
+          const res = await fetch(getOriginalImageUrl(pid, iid));
+          const blob = await res.blob();
+          await svc.inferImage(blob, {
+            image_id: iid,
+            session_id: session.id,
+            label_mapping: project?.label_mapping ?? {},
+            requested_types: session.supported_result_types,
+            width: image?.width,
+            height: image?.height,
+          });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "Failed to upload image";
+          dispatchInteractive({ type: "SESSION_ERROR", error: msg });
+          setError(msg);
+          return;
+        }
+
+        dispatchInteractive({ type: "SESSION_READY" });
+        setSamTool("positive_point");
+        setShowInteractiveModal(false);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to start interactive session";
+        dispatchInteractive({ type: "SESSION_ERROR", error: msg });
+        setError(msg);
+      }
+    },
+    [pid, iid, project, image]
+  );
+
+  const handleSamPoint = useCallback((x: number, y: number) => {
+    const promptType = samTool === "negative_point" ? "negative_point" : "positive_point";
+    dispatchInteractive({
+      type: "ADD_PROMPT",
+      prompt: { type: promptType, x, y },
+    });
+  }, [samTool]);
+
+  const handleSamBox = useCallback((x: number, y: number, width: number, height: number) => {
+    dispatchInteractive({
+      type: "ADD_PROMPT",
+      prompt: { type: "box", x, y, width, height },
+    });
+  }, []);
+
+  const handleSamSend = useCallback(async () => {
+    const s = interactiveStateRef.current;
+    if (s.type !== "prompting") return;
+    const svc = serviceClientRef.current;
+    if (!svc) return;
+
+    dispatchInteractive({ type: "SEND_PROMPTS" });
+    try {
+      const raw = await svc.predict({
+        session_id: s.session.id,
+        image_id: iid,
+        step_index: s.prompts.length,
+        prompts: s.prompts.map((p) => ({ ...p })),
+        label_mapping: project?.label_mapping ?? {},
+        requested_types: s.session.supported_result_types,
+        width: image?.width,
+        height: image?.height,
+      });
+
+      const ann = raw.annotation as Record<string, unknown> | null;
+      const candidate: InteractiveCandidate = {
+        annotation_type: (ann?.["annotation_type"] as string) || "polygon",
+        label: (ann?.["label"] as number) ?? null,
+        polygon: ann?.["polygon"] as InteractiveCandidate["polygon"],
+        box: ann?.["box"] as InteractiveCandidate["box"],
+        keypoint: ann?.["keypoint"] as InteractiveCandidate["keypoint"],
+        score: (raw.score as number | null) ?? null,
+        model_version: (raw.model_version as string | null) ?? null,
+      };
+
+      dispatchInteractive({ type: "CANDIDATE_ARRIVED", candidate });
+      setSamCandidateLabel(candidate.label);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Prediction failed";
+      dispatchInteractive({ type: "SESSION_ERROR", error: msg });
+      setError(msg);
+    }
+  }, [iid, project, image]);
+
+  const handleSamCommit = useCallback(async () => {
+    const s = interactiveStateRef.current;
+    if (s.type !== "reviewing") return;
+
+    dispatchInteractive({ type: "COMMIT_REQUEST" });
+    try {
+      const c = s.candidate;
+      await commitInteractiveSession(pid, iid, s.session.id, {
+        annotation_type: c.annotation_type,
+        label: samCandidateLabel,
+        polygon: c.polygon,
+        box: c.box,
+        keypoint: c.keypoint,
+        prompts: s.prompts.map((p) => ({ ...p })),
+        score: c.score,
+        model_version: c.model_version ?? "",
+      });
+      dispatchInteractive({ type: "COMMIT_SUCCESS" });
+      // Refresh annotations and operations from the server.
+      const annResp = await getAnnotations(pid, iid, { limit: 500 });
+      setAnnotations(annResp.items);
+      refreshOperations();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Commit failed";
+      dispatchInteractive({ type: "COMMIT_FAILED", error: msg });
+      setError(msg);
+    }
+  }, [pid, iid, samCandidateLabel, refreshOperations]);
+
+  const handleSamDiscard = useCallback(async () => {
+    const s = interactiveStateRef.current;
+    const sid = s.type !== "idle" ? s.session.id : null;
+    const svc = serviceClientRef.current;
+
+    // Best-effort: release service seat + server discard
+    if (svc) svc.release().catch(() => {});
+    if (sid) discardInteractiveSession(pid, iid, sid).catch(() => {});
+
+    dispatchInteractive({ type: "DISCARD" });
+    serviceClientRef.current = null;
+    setSamCandidateLabel(null);
+  }, [pid, iid]);
+
+  const handleSamUndo = useCallback(() => {
+    const s = interactiveStateRef.current;
+    if (s.type === "prompting" || s.type === "reviewing") {
+      dispatchInteractive({ type: "POP_PROMPT" });
+      setSamCandidateLabel(null);
+    }
   }, []);
 
   // ---- Selection ----
@@ -205,6 +401,7 @@ export default function AnnotatePage() {
   const changeTool = useCallback(
     (tool: ToolType) => {
       if (tool === activeTool) return;
+      if (interactiveStateRef.current.type !== "idle") return; // blocked during SAM
       if (blockPendingWork()) return;
       setActiveTool(tool);
       // Leaving select mode: if editing, cancel it
@@ -609,7 +806,6 @@ export default function AnnotatePage() {
 
   const contextMenuActions: ContextMenuAction[] = [
     { label: "Modify", icon: Pencil, shortcut: "drag" },
-    { label: "Change Label", icon: Tag },
     { label: "Delete", icon: Trash2, shortcut: "Del", destructive: true },
   ];
 
@@ -621,10 +817,7 @@ export default function AnnotatePage() {
       case 0: // Modify
         startEditingAnnotation(id);
         break;
-      case 1: // Change Label
-        selectAnnotation(id);
-        break;
-      case 2: // Delete
+      case 1: // Delete
         handleDeleteById(id);
         break;
     }
@@ -668,7 +861,14 @@ export default function AnnotatePage() {
           }
           break;
         case "enter":
-          if (activeTool === "draw-point" && keypointDraftCount > 0) {
+          if (interactive.isActive) {
+            const ist = interactiveStateRef.current;
+            if (ist.type === "reviewing") {
+              handleSamCommit();
+            } else if (ist.type === "prompting" && ist.prompts.length > 0) {
+              handleSamSend();
+            }
+          } else if (activeTool === "draw-point" && keypointDraftCount > 0) {
             mapRef.current?.finishKeypointGroup();
           } else if (s.type === "drafting" && !s.saving) {
             handleSaveDraft();
@@ -677,6 +877,10 @@ export default function AnnotatePage() {
           }
           break;
         case "escape":
+          if (interactive.isActive) {
+            handleSamDiscard();
+            break;
+          }
           setCtxMenu(null);
           if (activeTool === "draw-point" && keypointDraftCount > 0) {
             mapRef.current?.cancelKeypointGroup();
@@ -844,40 +1048,72 @@ export default function AnnotatePage() {
               ? () => setShowInferenceModal(true)
               : undefined
           }
+          onOpenInteractive={
+            project?.my_role != null
+              ? () => handleOpenInteractiveModal()
+              : undefined
+          }
+          interactiveActive={interactive.isActive}
         />
 
-        <AnnotationMap
-          ref={mapRef}
-          imageUrl={getOriginalImageUrl(pid, iid)}
-          width={image.width ?? 800}
-          height={image.height ?? 600}
-          annotations={annotations}
-          selectedAnnotationId={selectedId}
-          editingAnnotationId={editingId}
-          labelMapping={labelMapping}
-          activeTool={activeTool}
-          onDrawComplete={handleDrawComplete}
-          onModified={handleModify}
-          onSelect={selectAnnotation}
-          onEditStart={startEditingAnnotation}
-          onCoordinateChange={(x, y) => {
-            setMouseX(x);
-            setMouseY(y);
-          }}
-          onZoomChange={setZoomPercent}
-          onDrawPreview={setDrawPreview}
-          onAnnotationContextMenu={handleAnnotationContextMenu}
-          overlayContainerRef={setOverlayEl}
-          onEditStateChange={(dirty) => {
-            if (dirty) {
-              setGeometryDirty();
-            } else {
-              setGeometryClean();
-            }
-          }}
-          onKeypointDraftChange={setKeypointDraftCount}
-          boxRotationEnabled={boxRotationEnabled}
-        />
+        <div className="relative flex-1">
+          {/* Interactive SAM toolbar — floats above the map */}
+          {interactive.isActive && (
+            <InteractiveToolbar
+              activeTool={samTool}
+              onToolChange={setSamTool}
+              prompts={
+                "prompts" in interactiveState ? interactiveState.prompts : []
+              }
+              canSend={
+                interactiveState.type === "prompting" &&
+                interactiveState.prompts.length > 0
+              }
+              isLoading={interactiveState.type === "loading"}
+              hasCandidate={interactive.hasCandidate}
+              onSend={handleSamSend}
+              onUndo={handleSamUndo}
+              onDiscard={handleSamDiscard}
+              onCommit={handleSamCommit}
+            />
+          )}
+
+          <AnnotationMap
+            ref={mapRef}
+            imageUrl={getOriginalImageUrl(pid, iid)}
+            width={image.width ?? 800}
+            height={image.height ?? 600}
+            annotations={annotations}
+            selectedAnnotationId={selectedId}
+            editingAnnotationId={editingId}
+            labelMapping={labelMapping}
+            activeTool={effectiveTool}
+            onDrawComplete={handleDrawComplete}
+            onModified={handleModify}
+            onSelect={selectAnnotation}
+            onEditStart={startEditingAnnotation}
+            onCoordinateChange={(x, y) => {
+              setMouseX(x);
+              setMouseY(y);
+            }}
+            onZoomChange={setZoomPercent}
+            onDrawPreview={setDrawPreview}
+            onAnnotationContextMenu={handleAnnotationContextMenu}
+            overlayContainerRef={setOverlayEl}
+            onEditStateChange={(dirty) => {
+              if (dirty) {
+                setGeometryDirty();
+              } else {
+                setGeometryClean();
+              }
+            }}
+            onKeypointDraftChange={setKeypointDraftCount}
+            boxRotationEnabled={boxRotationEnabled}
+            onSamPoint={handleSamPoint}
+            onSamBox={handleSamBox}
+            interactiveActive={interactive.isActive}
+          />
+        </div>
 
         {/* Floating info card — portalled into the OL overlay. Mode-driven:
             draft = label picker, edit = commit surface, view = read-only. */}
@@ -973,6 +1209,15 @@ export default function AnnotatePage() {
           imageId={iid}
           onClose={() => setShowInferenceModal(false)}
           onComplete={handleInferenceComplete}
+        />
+      )}
+      {/* Interactive SAM modal */}
+      {project?.my_role != null && (
+        <InteractiveInferenceModal
+          open={showInteractiveModal}
+          projectId={pid}
+          onClose={() => setShowInteractiveModal(false)}
+          onProviderSelected={handleInteractiveProviderSelected}
         />
       )}
     </div>

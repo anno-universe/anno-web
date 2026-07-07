@@ -134,6 +134,12 @@ interface Props {
   onKeypointDraftChange?: (count: number) => void;
   /** Project flag: expose a rotation handle when editing/drafting boxes. */
   boxRotationEnabled?: boolean;
+  /** Called when a SAM point is placed (image-pixel coordinates). */
+  onSamPoint?: (x: number, y: number) => void;
+  /** Called when a SAM box prompt is drawn (image-pixel AABB). */
+  onSamBox?: (x: number, y: number, width: number, height: number) => void;
+  /** True when an interactive SAM session is active — gates SAM tool behavior. */
+  interactiveActive?: boolean;
 }
 
 export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
@@ -159,6 +165,9 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       onEditStateChange,
       onKeypointDraftChange,
       boxRotationEnabled,
+      onSamPoint,
+      onSamBox,
+      interactiveActive: _interactiveActive,
     },
     ref
   ) {
@@ -227,6 +236,8 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     const onEditStateChangeRef = useRef(onEditStateChange);
     const onKeypointDraftChangeRef = useRef(onKeypointDraftChange);
     const boxRotationEnabledRef = useRef(boxRotationEnabled);
+    const onSamPointRef = useRef(onSamPoint);
+    const onSamBoxRef = useRef(onSamBox);
 
     activeToolRef.current = activeTool;
     selectedIdRef.current = selectedAnnotationId;
@@ -242,6 +253,8 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     onEditStateChangeRef.current = onEditStateChange;
     onKeypointDraftChangeRef.current = onKeypointDraftChange;
     boxRotationEnabledRef.current = boxRotationEnabled;
+    onSamPointRef.current = onSamPoint;
+    onSamBoxRef.current = onSamBox;
 
     // ---- Edit-session helpers ----
     const notifyDirty = useCallback((dirty: boolean) => {
@@ -897,6 +910,21 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         const ext = feature.getGeometry()?.getExtent();
         if (!ext) return;
         if (ext[2] - ext[0] < 5 || ext[3] - ext[1] < 5) return;
+        // SAM box prompt: convert to image-pixel AABB and fire callback.
+        if (activeToolRef.current === "sam-box" && onSamBoxRef.current) {
+          const geom = feature.getGeometry()!.clone();
+          flipGeometryY(geom, height);
+          const boxExt = geom.getExtent();
+          onSamBoxRef.current(
+            boxExt[0],
+            height - boxExt[3], // top-left y in image coords
+            boxExt[2] - boxExt[0],
+            boxExt[3] - boxExt[1],
+          );
+          map.removeOverlay(overlayRef.current!);
+          vectorSourceRef.current!.removeFeature(feature);
+          return;
+        }
         const input = featureToAnnotationInput(feature, "box", null, height);
         beginDraft(feature, "box", input);
       });
@@ -937,7 +965,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       // Keep the box draw suspended while a draft preview is being edited, so
       // its pointer events don't compete with the resize/rotate handles.
       drawBoxRef.current?.setActive(
-        activeTool === "draw-box" && !hasDraftRef.current
+        (activeTool === "draw-box" || activeTool === "sam-box") && !hasDraftRef.current
       );
       drawPolygonRef.current?.setActive(activeTool === "draw-polygon");
 
@@ -998,6 +1026,25 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       addKeypointPoint,
       finishKeypointGroup,
     ]);
+
+    // ---- SAM point tool ----
+    useEffect(() => {
+      const map = mapRef.current;
+      if (!map || activeTool !== "sam-point") return;
+
+      dblClickZoomRef.current?.setActive(false);
+      const onSingle = (e: any) => {
+        const pt = mapToImage(e.coordinate, height);
+        onSamPointRef.current?.(pt.x, pt.y);
+      };
+      map.on("singleclick", onSingle);
+      const samPointHandlers = { onSingle };
+
+      return () => {
+        map.un("singleclick", samPointHandlers.onSingle);
+        if (dblClickZoomRef.current) dblClickZoomRef.current.setActive(true);
+      };
+    }, [activeTool, height]);
 
     // ---- Double-click a feature to enter the edit state ----
     useEffect(() => {

@@ -3,7 +3,9 @@ export type ToolType =
   | "pan"
   | "draw-box"
   | "draw-polygon"
-  | "draw-point";
+  | "draw-point"
+  | "sam-point"
+  | "sam-box";
 
 const toolNames: Record<ToolType, string> = {
   select: "Select",
@@ -11,6 +13,8 @@ const toolNames: Record<ToolType, string> = {
   "draw-box": "Box",
   "draw-polygon": "Polygon",
   "draw-point": "Keypoint",
+  "sam-point": "SAM Point",
+  "sam-box": "SAM Box",
 };
 
 interface Props {

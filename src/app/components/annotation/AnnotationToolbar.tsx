@@ -10,6 +10,7 @@ import {
   Trash2,
   Check,
   X,
+  Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -39,6 +40,10 @@ interface Props {
   keypointEnabled?: boolean;
   /** Callback to open the AI inference modal (only rendered on annotate page for supervisors). */
   onOpenInference?: () => void;
+  /** Callback to open the interactive SAM modal. */
+  onOpenInteractive?: () => void;
+  /** True when an interactive SAM session is active — disables regular tools. */
+  interactiveActive?: boolean;
 }
 
 function buildTools(keypointEnabled: boolean) {
@@ -74,6 +79,8 @@ export function AnnotationToolbar({
   onCancelKeypoint,
   keypointEnabled = true,
   onOpenInference,
+  onOpenInteractive,
+  interactiveActive = false,
 }: Props) {
   const tools = buildTools(keypointEnabled);
 
@@ -120,11 +127,13 @@ export function AnnotationToolbar({
           <TooltipTrigger asChild>
             <button
               onClick={() => onToolChange(id)}
+              disabled={interactiveActive}
               className={cn(
                 "flex h-9 w-9 items-center justify-center rounded-md transition-colors",
                 activeTool === id
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                interactiveActive && "opacity-30 cursor-not-allowed hover:bg-transparent hover:text-muted-foreground"
               )}
               aria-label={`${label} tool`}
             >
@@ -137,8 +146,31 @@ export function AnnotationToolbar({
         </Tooltip>
       ))}
 
-      {/* Inference trigger (only on annotate page, supervisor only) */}
+      {/* Inference triggers */}
       {onOpenInference && <InferenceToolbarSection onClick={onOpenInference} />}
+      {onOpenInteractive && (
+        <>
+          <Separator className="my-1 w-8" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onOpenInteractive}
+                disabled={interactiveActive}
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-md text-violet-500 hover:bg-violet-50 hover:text-violet-600",
+                  interactiveActive && "opacity-30 cursor-not-allowed"
+                )}
+                aria-label="Open interactive SAM"
+              >
+                <Wand2 className="h-[18px] w-[18px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Interactive SAM</p>
+            </TooltipContent>
+          </Tooltip>
+        </>
+      )}
 
       <Separator className="my-2 w-8" />
 
