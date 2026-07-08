@@ -12,11 +12,11 @@
 // ---------------------------------------------------------------------------
 
 export interface ServiceClient {
-  /** Upload the image once (seat taken, embedding cached). */
+  /** Upload the image once (embedding cached). */
   inferImage: (imageBlob: Blob, metadata?: Record<string, unknown>) => Promise<void>;
   /** Send prompts; returns the service's JSON response. */
   predict: (metadata: Record<string, unknown>) => Promise<Record<string, unknown>>;
-  /** Best-effort release of the session's seat (called on discard). */
+  /** Best-effort release of the session (called on discard). */
   release: () => Promise<void>;
 }
 
@@ -91,7 +91,7 @@ export function createServiceClient(opts: ServiceClientOptions): ServiceClient {
 
     async release() {
       await request("DELETE", `/${sessionId}`).catch(() => {
-        // Best-effort; the service will TTL-sweep the seat anyway.
+        // Best-effort; the service will expire the token anyway.
       });
     },
   };

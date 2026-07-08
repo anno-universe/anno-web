@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Pencil, Trash2 } from "lucide-react";
 import { getProject } from "@/api/projects";
 import { getImage, getImages, getOriginalImageUrl } from "@/api/images";
+import { apiGetBlob } from "@/api/client";
 import {
   getAnnotations,
   createAnnotation,
@@ -123,6 +124,8 @@ export default function AnnotatePage() {
 
   // Keypoint draft count (separate from annotation state — draw interaction)
   const [keypointDraftCount, setKeypointDraftCount] = useState(0);
+  const keypointDraftCountRef = useRef(keypointDraftCount);
+  keypointDraftCountRef.current = keypointDraftCount;
 
   // Inference modal
   const [showInferenceModal, setShowInferenceModal] = useState(false);
@@ -158,6 +161,10 @@ export default function AnnotatePage() {
 
   const mapRef = useRef<AnnotationMapHandle>(null);
 
+  // Prevent Escape from cancelling an edit mid-save (race between async
+  // API call in handleModify and user-triggered CANCEL_EDIT).
+  const savingRef = useRef(false);
+
   // ---- Blocking guard (used by tool changes, etc.) ----
   const blockPendingWork = useCallback(() => {
     const s = stateRef.current;
@@ -166,10 +173,18 @@ export default function AnnotatePage() {
       return true;
     }
     if (s.type === "editing") {
-      if (s.dirty.geometry || s.dirty.label || s.pendingLabel !== null) {
+      if (
+        s.dirty.geometry ||
+        s.dirty.label ||
+        s.pendingLabel !== s.originalSnapshot.label
+      ) {
         setError("Save or revert the current edit before continuing.");
         return true;
       }
+    }
+    if (keypointDraftCountRef.current > 0) {
+      setError("Finish or cancel the current keypoint before continuing.");
+      return true;
     }
     return false;
   }, []);
@@ -200,10 +215,9 @@ export default function AnnotatePage() {
         });
         serviceClientRef.current = svc;
 
-        // 3. Upload the image to the service (get a seat)
+        // 3. Upload the image to the service (cache the embedding)
         try {
-          const res = await fetch(getOriginalImageUrl(pid, iid));
-          const blob = await res.blob();
+          const blob = await apiGetBlob(getOriginalImageUrl(pid, iid));
           await svc.inferImage(blob, {
             image_id: iid,
             session_id: session.id,
@@ -216,6 +230,7 @@ export default function AnnotatePage() {
           const msg = err instanceof Error ? err.message : "Failed to upload image";
           dispatchInteractive({ type: "SESSION_ERROR", error: msg });
           setError(msg);
+          setShowInteractiveModal(false);
           return;
         }
 
@@ -226,6 +241,7 @@ export default function AnnotatePage() {
         const msg = err instanceof Error ? err.message : "Failed to start interactive session";
         dispatchInteractive({ type: "SESSION_ERROR", error: msg });
         setError(msg);
+        setShowInteractiveModal(false);
       }
     },
     [pid, iid, project, image]
@@ -278,6 +294,8 @@ export default function AnnotatePage() {
 
       dispatchInteractive({ type: "CANDIDATE_ARRIVED", candidate });
       setSamCandidateLabel(candidate.label);
+      // Render the candidate polygon on the map.
+      mapRef.current?.setSamCandidate(candidate.polygon?.points ?? null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Prediction failed";
       dispatchInteractive({ type: "SESSION_ERROR", error: msg });
@@ -303,7 +321,11 @@ export default function AnnotatePage() {
         model_version: c.model_version ?? "",
       });
       dispatchInteractive({ type: "COMMIT_SUCCESS" });
-      // Refresh annotations and operations from the server.
+      // Clean up prompt + candidate rendering for the next annotation.
+      mapRef.current?.clearSamPrompts();
+      mapRef.current?.setSamCandidate(null);
+      setSamCandidateLabel(null);
+      // Refresh annotations so the newly created one appears on the map.
       const annResp = await getAnnotations(pid, iid, { limit: 500 });
       setAnnotations(annResp.items);
       refreshOperations();
@@ -319,13 +341,15 @@ export default function AnnotatePage() {
     const sid = s.type !== "idle" ? s.session.id : null;
     const svc = serviceClientRef.current;
 
-    // Best-effort: release service seat + server discard
+    // Best-effort: release service session + server discard
     if (svc) svc.release().catch(() => {});
     if (sid) discardInteractiveSession(pid, iid, sid).catch(() => {});
 
     dispatchInteractive({ type: "DISCARD" });
     serviceClientRef.current = null;
     setSamCandidateLabel(null);
+    mapRef.current?.clearSamPrompts();
+    mapRef.current?.setSamCandidate(null);
   }, [pid, iid]);
 
   const handleSamUndo = useCallback(() => {
@@ -333,6 +357,8 @@ export default function AnnotatePage() {
     if (s.type === "prompting" || s.type === "reviewing") {
       dispatchInteractive({ type: "POP_PROMPT" });
       setSamCandidateLabel(null);
+      mapRef.current?.setSamCandidate(null);
+      mapRef.current?.popSamPrompt();
     }
   }, []);
 
@@ -347,7 +373,11 @@ export default function AnnotatePage() {
       }
       // Blocked while editing with dirty changes
       if (s.type === "editing") {
-        if (s.dirty.geometry || s.dirty.label || s.pendingLabel !== null) {
+        if (
+          s.dirty.geometry ||
+          s.dirty.label ||
+          s.pendingLabel !== s.originalSnapshot.label
+        ) {
           setError("Save or revert the current edit before selecting another.");
           return;
         }
@@ -376,7 +406,9 @@ export default function AnnotatePage() {
       if (
         s.type === "editing" &&
         s.selectedId !== id &&
-        (s.dirty.geometry || s.dirty.label || s.pendingLabel !== null)
+        (s.dirty.geometry ||
+          s.dirty.label ||
+          s.pendingLabel !== s.originalSnapshot.label)
       ) {
         setError("Save or revert the current edit before editing another annotation.");
         return;
@@ -424,20 +456,15 @@ export default function AnnotatePage() {
         : undefined;
 
     saveEditRequest();
+    savingRef.current = true;
 
     try {
-      // commitEdit calls onModified which does the PATCH and returns the new annotation
-      // We need to intercept this flow. Actually, commitEdit calls onModifiedRef.current
-      // which is handleModify. handleModify does the API call.
-      // So the flow is: commitEdit → handleModify → API → state update
-      //
-      // But handleModify handles its own success/failure. We need to bridge this.
-      // For now, commitEdit triggers the modify flow; we'll handle the transition
-      // in handleModify based on the current state.
       mapRef.current?.commitEdit(labelOverride);
       // handleModify will call saveEditSuccess or saveEditFailed
     } catch {
       saveEditFailed("Failed to save");
+    } finally {
+      savingRef.current = false;
     }
   }, [saveEditRequest, saveEditFailed]);
 
@@ -612,17 +639,22 @@ export default function AnnotatePage() {
     const liveInput = mapRef.current?.getDraftAnnotationInput();
 
     commitDraftRequest();
-    const created = await commitCreate({
-      ...(liveInput ?? s.pendingCreate),
-      label: s.selectedLabel,
-    });
-    if (!created) {
-      commitDraftFailed("Failed to create annotation");
-      return;
-    }
+    savingRef.current = true;
+    try {
+      const created = await commitCreate({
+        ...(liveInput ?? s.pendingCreate),
+        label: s.selectedLabel,
+      });
+      if (!created) {
+        commitDraftFailed("Failed to create annotation");
+        return;
+      }
 
-    mapRef.current?.clearDraft();
-    commitDraftSuccess(created);
+      mapRef.current?.clearDraft();
+      commitDraftSuccess(created);
+    } finally {
+      savingRef.current = false;
+    }
   }, [commitCreate, commitDraftRequest, commitDraftFailed, commitDraftSuccess]);
 
   // Discard the draft without creating anything.
@@ -654,8 +686,6 @@ export default function AnnotatePage() {
           saveEditSuccess(modified);
         }
 
-        // Update selectedId to follow the new annotation ID
-        setGeometryClean();
         refreshOperations();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Failed to modify";
@@ -696,7 +726,9 @@ export default function AnnotatePage() {
       if (
         s.type === "editing" &&
         s.selectedId === annotationId &&
-        (s.dirty.geometry || s.dirty.label || s.pendingLabel !== null)
+        (s.dirty.geometry ||
+          s.dirty.label ||
+          s.pendingLabel !== s.originalSnapshot.label)
       ) {
         setError("Save or revert the current edit before deleting.");
         return;
@@ -745,7 +777,9 @@ export default function AnnotatePage() {
       if (
         s.type === "editing" &&
         s.selectedId === annotationId &&
-        (s.dirty.geometry || s.dirty.label || s.pendingLabel !== null)
+        (s.dirty.geometry ||
+          s.dirty.label ||
+          s.pendingLabel !== s.originalSnapshot.label)
       ) {
         setError("Save or revert the current edit before deleting.");
         return;
@@ -884,9 +918,9 @@ export default function AnnotatePage() {
           setCtxMenu(null);
           if (activeTool === "draw-point" && keypointDraftCount > 0) {
             mapRef.current?.cancelKeypointGroup();
-          } else if (s.type === "editing") {
+          } else if (s.type === "editing" && !savingRef.current) {
             handleRevertEdit();
-          } else if (s.type === "drafting") {
+          } else if (s.type === "drafting" && !savingRef.current) {
             handleDiscardDraft();
           } else {
             selectAnnotation(null);
@@ -908,6 +942,7 @@ export default function AnnotatePage() {
     selectedId,
     activeTool,
     keypointDraftCount,
+    interactive.isActive,
     selectAnnotation,
     changeTool,
     handleSaveDraft,
@@ -1111,6 +1146,7 @@ export default function AnnotatePage() {
           onSamPoint={handleSamPoint}
           onSamBox={handleSamBox}
           interactiveActive={interactive.isActive}
+          samPointNegative={samTool === "negative_point"}
         />
 
         {/* Floating info card — portalled into the OL overlay. Mode-driven:

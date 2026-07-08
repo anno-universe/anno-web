@@ -66,6 +66,36 @@ import type {
 import type { ToolType } from "./StatusBar";
 
 import GeoJSON from "ol/format/GeoJSON";
+import { Fill, Stroke, Circle as CircleStyle, Style } from "ol/style";
+import type { default as OLStyle } from "ol/style/Style";
+
+// ---- SAM prompt / candidate style helpers ----
+
+const _samPointStyle = new Style({
+  image: new CircleStyle({ radius: 6, fill: new Fill({ color: "#22c55e" }), stroke: new Stroke({ color: "#fff", width: 2 }) }),
+});
+const _samNegativeStyle = new Style({
+  image: new CircleStyle({ radius: 6, fill: new Fill({ color: "#ef4444" }), stroke: new Stroke({ color: "#fff", width: 2 }) }),
+});
+const _samBoxPromptStyle = new Style({
+  stroke: new Stroke({ color: "#a855f7", width: 2, lineDash: [6, 4] }),
+  fill: new Fill({ color: "rgba(168,85,247,0.08)" }),
+});
+const _samCandidateStyle = (): OLStyle =>
+  new Style({
+    stroke: new Stroke({ color: "#3b82f6", width: 2.5, lineDash: [8, 4] }),
+    fill: new Fill({ color: "rgba(59,130,246,0.18)" }),
+  });
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function _samPromptStyle(feature: any): OLStyle {
+  const geom = feature.getGeometry();
+  if (geom instanceof Point) {
+    const tag = feature.get("_samTag");
+    return tag === "neg" ? _samNegativeStyle : _samPointStyle;
+  }
+  return _samBoxPromptStyle;
+}
 
 export interface AnnotationSnapshot {
   annotationId: number;
@@ -101,6 +131,12 @@ export interface AnnotationMapHandle {
    * reducer holds an immutable reference point for revert.
    */
   captureAnnotationSnapshot: (annotationId: number) => AnnotationSnapshot | null;
+  /** Show a polygon as the SAM candidate (or pass null to clear). Point coords are image-pixel y-down. */
+  setSamCandidate: (points: number[][] | null) => void;
+  /** Remove all SAM prompt point / box features from the map. */
+  clearSamPrompts: () => void;
+  /** Remove the most recently added SAM prompt feature from the map. */
+  popSamPrompt: () => void;
 }
 
 interface Props {
@@ -140,6 +176,8 @@ interface Props {
   onSamBox?: (x: number, y: number, width: number, height: number) => void;
   /** True when an interactive SAM session is active — gates SAM tool behavior. */
   interactiveActive?: boolean;
+  /** When true, SAM point clicks render red (negative) markers. */
+  samPointNegative?: boolean;
 }
 
 export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
@@ -168,6 +206,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       onSamPoint,
       onSamBox,
       interactiveActive: _interactiveActive,
+      samPointNegative = false,
     },
     ref
   ) {
@@ -175,6 +214,8 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     const mapRef = useRef<OLMap | null>(null);
     const vectorSourceRef = useRef<VectorSource | null>(null);
     const draftSourceRef = useRef<VectorSource | null>(null);
+    const samPromptSourceRef = useRef<VectorSource | null>(null);
+    const samCandidateSourceRef = useRef<VectorSource | null>(null);
     const vectorLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
     const selectRef =
       useRef<ReturnType<typeof createSelectInteraction> | null>(null);
@@ -255,6 +296,8 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     boxRotationEnabledRef.current = boxRotationEnabled;
     onSamPointRef.current = onSamPoint;
     onSamBoxRef.current = onSamBox;
+    const samPointNegativeRef = useRef(samPointNegative);
+    samPointNegativeRef.current = samPointNegative;
 
     // ---- Edit-session helpers ----
     const notifyDirty = useCallback((dirty: boolean) => {
@@ -644,6 +687,26 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         clearDraft,
         getDraftAnnotationInput,
         captureAnnotationSnapshot,
+        /** Replace the SAM candidate feature with the given polygon (or clear it). */
+        setSamCandidate: (points: number[][] | null) => {
+          samCandidateSourceRef.current?.clear();
+          if (points && points.length >= 3) {
+            const geom = polygonPointsToGeometry(points);
+            flipGeometryY(geom, height);
+            samCandidateSourceRef.current?.addFeature(new Feature(geom));
+          }
+        },
+        clearSamPrompts: () => {
+          samPromptSourceRef.current?.clear();
+        },
+        popSamPrompt: () => {
+          const src = samPromptSourceRef.current;
+          if (!src) return;
+          const features = src.getFeatures();
+          if (features.length > 0) {
+            src.removeFeature(features[features.length - 1]);
+          }
+        },
       }),
       [
         zoomIn,
@@ -696,6 +759,30 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         style: (feature) => keypointDraftStyleFn(feature as Feature),
       });
 
+      // SAM prompt layer: shows point markers and box outlines during
+      // interactive segmentation. Styled distinctly from annotations.
+      const samPromptSource = new VectorSource();
+      samPromptSourceRef.current = samPromptSource;
+      const samPromptLayer = new VectorLayer({
+        source: samPromptSource,
+        renderBuffer: 16,
+        updateWhileAnimating: false,
+        updateWhileInteracting: false,
+        style: _samPromptStyle,
+      });
+
+      // SAM candidate layer: shows the returned mask polygon before the user
+      // commits it. Blue semi-transparent fill.
+      const samCandidateSource = new VectorSource();
+      samCandidateSourceRef.current = samCandidateSource;
+      const samCandidateLayer = new VectorLayer({
+        source: samCandidateSource,
+        renderBuffer: 16,
+        updateWhileAnimating: false,
+        updateWhileInteracting: false,
+        style: _samCandidateStyle,
+      });
+
       const map = new Map({
         target: containerRef.current,
         layers: [],
@@ -746,6 +833,8 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         });
 
         map.addLayer(imageLayer);
+        map.addLayer(samPromptLayer);
+        map.addLayer(samCandidateLayer);
         map.addLayer(vectorLayer);
         map.addLayer(draftLayer);
         map.getView().fit(extent, { padding: [20, 20, 20, 20] });
@@ -917,12 +1006,12 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
           const boxExt = geom.getExtent();
           onSamBoxRef.current(
             boxExt[0],
-            height - boxExt[3], // top-left y in image coords
+            boxExt[1], // top-left y in image coords (minY after flip = top edge)
             boxExt[2] - boxExt[0],
             boxExt[3] - boxExt[1],
           );
-          map.removeOverlay(overlayRef.current!);
-          vectorSourceRef.current!.removeFeature(feature);
+          // Keep the box on the map as prompt feedback.
+          samPromptSourceRef.current?.addFeature(feature);
           return;
         }
         const input = featureToAnnotationInput(feature, "box", null, height);
@@ -1036,6 +1125,11 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       const onSingle = (e: any) => {
         const pt = mapToImage(e.coordinate, height);
         onSamPointRef.current?.(pt.x, pt.y);
+        // Render the prompt point on the SAM prompt layer.
+        const neg = samPointNegativeRef.current || e.originalEvent?.shiftKey === true;
+        const feature = new Feature(new Point(e.coordinate));
+        feature.set("_samTag", neg ? "neg" : "pos");
+        samPromptSourceRef.current?.addFeature(feature);
       };
       map.on("singleclick", onSingle);
       const samPointHandlers = { onSingle };

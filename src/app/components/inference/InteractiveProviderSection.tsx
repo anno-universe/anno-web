@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  getInferenceProviders,
-  createInferenceProvider,
-  updateInferenceProvider,
-  deleteInferenceProvider,
-} from "@/api/inferenceProviders";
+  getInteractiveProviders,
+  createInteractiveProvider,
+  updateInteractiveProvider,
+  deleteInteractiveProvider,
+} from "@/api/interactiveInference";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
@@ -46,29 +46,44 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type {
-  InferenceProviderOutput,
-  InferenceProviderCreateInput,
-  ResultType,
-  ProviderAuthType,
-} from "@/types/inferenceProvider";
+  InteractiveProviderOutput,
+  InteractiveProviderCreateInput,
+  InteractivePromptType,
+  InteractiveResultType,
+} from "@/types/interactiveInference";
 
-const RESULT_TYPE_COLORS: Record<ResultType, string> = {
+const PROMPT_TYPE_COLORS: Record<InteractivePromptType, string> = {
+  box: "bg-blue-100 text-blue-700 border-blue-200",
+  positive_point: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  negative_point: "bg-red-100 text-red-700 border-red-200",
+  mask: "bg-purple-100 text-purple-700 border-purple-200",
+  text: "bg-amber-100 text-amber-700 border-amber-200",
+};
+
+const RESULT_TYPE_COLORS: Record<InteractiveResultType, string> = {
   box: "bg-green-100 text-green-700 border-green-200",
   polygon: "bg-blue-100 text-blue-700 border-blue-200",
   keypoint: "bg-amber-100 text-amber-700 border-amber-200",
 };
 
-const ALL_RESULT_TYPES: ResultType[] = ["box", "polygon", "keypoint"];
+const ALL_PROMPT_TYPES: InteractivePromptType[] = [
+  "box",
+  "positive_point",
+  "negative_point",
+  "mask",
+  "text",
+];
+
+const ALL_RESULT_TYPES: InteractiveResultType[] = ["polygon", "box", "keypoint"];
 
 interface Props {
   projectId: number;
   isSupervisor: boolean;
 }
 
-export function ProviderSection({ projectId, isSupervisor }: Props) {
-
+export function InteractiveProviderSection({ projectId, isSupervisor }: Props) {
   // List state
-  const [providers, setProviders] = useState<InferenceProviderOutput[]>([]);
+  const [providers, setProviders] = useState<InteractiveProviderOutput[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -78,8 +93,9 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
   const [newUrl, setNewUrl] = useState("");
   const [newModelName, setNewModelName] = useState("");
   const [newDescription, setNewDescription] = useState("");
-  const [newResultTypes, setNewResultTypes] = useState<ResultType[]>([]);
-  const [newAuthType, setNewAuthType] = useState<ProviderAuthType>("none");
+  const [newPromptTypes, setNewPromptTypes] = useState<InteractivePromptType[]>([]);
+  const [newResultTypes, setNewResultTypes] = useState<InteractiveResultType[]>([]);
+  const [newAuthType, setNewAuthType] = useState<"none" | "header" | "query">("none");
   const [newAuthParam, setNewAuthParam] = useState("");
   const [newAuthSecret, setNewAuthSecret] = useState("");
   const [newTimeout, setNewTimeout] = useState(60);
@@ -87,13 +103,14 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
   const [creating, setCreating] = useState(false);
 
   // Edit state
-  const [editingProvider, setEditingProvider] = useState<InferenceProviderOutput | null>(null);
+  const [editingProvider, setEditingProvider] = useState<InteractiveProviderOutput | null>(null);
   const [editName, setEditName] = useState("");
   const [editUrl, setEditUrl] = useState("");
   const [editModelName, setEditModelName] = useState("");
   const [editDescription, setEditDescription] = useState("");
-  const [editResultTypes, setEditResultTypes] = useState<ResultType[]>([]);
-  const [editAuthType, setEditAuthType] = useState<ProviderAuthType>("none");
+  const [editPromptTypes, setEditPromptTypes] = useState<InteractivePromptType[]>([]);
+  const [editResultTypes, setEditResultTypes] = useState<InteractiveResultType[]>([]);
+  const [editAuthType, setEditAuthType] = useState<"none" | "header" | "query">("none");
   const [editAuthParam, setEditAuthParam] = useState("");
   const [editAuthSecret, setEditAuthSecret] = useState("");
   const [editTimeout, setEditTimeout] = useState(60);
@@ -102,18 +119,17 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
 
   // Delete state
   const [deleting, setDeleting] = useState(false);
-  const [deleteTarget, setDeleteTarget] =
-    useState<InferenceProviderOutput | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<InteractiveProviderOutput | null>(null);
 
   const fetchProviders = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const resp = await getInferenceProviders(projectId, { limit: 200 });
+      const resp = await getInteractiveProviders(projectId, { limit: 200 });
       setProviders(resp.items);
     } catch (err: unknown) {
       setError(
-        err instanceof Error ? err.message : "Failed to load providers"
+        err instanceof Error ? err.message : "Failed to load interactive providers"
       );
     } finally {
       setLoading(false);
@@ -130,6 +146,7 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
     setNewUrl("");
     setNewModelName("");
     setNewDescription("");
+    setNewPromptTypes([]);
     setNewResultTypes([]);
     setNewAuthType("none");
     setNewAuthParam("");
@@ -141,13 +158,19 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
 
   // ---- Create ----
   async function handleCreate() {
-    if (!newName.trim() || !newUrl.trim() || newResultTypes.length === 0)
+    if (
+      !newName.trim() ||
+      !newUrl.trim() ||
+      newPromptTypes.length === 0 ||
+      newResultTypes.length === 0
+    )
       return;
     setCreating(true);
     try {
-      const input: InferenceProviderCreateInput = {
+      const input: InteractiveProviderCreateInput = {
         name: newName.trim(),
         inference_url: newUrl.trim(),
+        supported_prompt_types: newPromptTypes,
         supported_result_types: newResultTypes,
         model_name: newModelName.trim(),
         description: newDescription.trim(),
@@ -157,10 +180,10 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
         timeout_seconds: newTimeout,
         is_active: newIsActive,
       };
-      await createInferenceProvider(projectId, input);
+      await createInteractiveProvider(projectId, input);
       resetCreateForm();
       await fetchProviders();
-      toast.success("Inference provider created.");
+      toast.success("Interactive provider created.");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to create provider");
     } finally {
@@ -169,12 +192,13 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
   }
 
   // ---- Edit ----
-  function startEdit(p: InferenceProviderOutput) {
+  function startEdit(p: InteractiveProviderOutput) {
     setEditingProvider(p);
     setEditName(p.name);
     setEditUrl(p.inference_url);
     setEditModelName(p.model_name);
     setEditDescription(p.description);
+    setEditPromptTypes([...p.supported_prompt_types]);
     setEditResultTypes([...p.supported_result_types]);
     setEditAuthType(p.auth_type);
     setEditAuthParam(p.auth_param_name);
@@ -201,7 +225,12 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
       if (editDescription.trim() !== (editingProvider.description ?? ""))
         patch.description = editDescription.trim() || null;
       if (
-        JSON.stringify(editResultTypes.sort()) !==
+        JSON.stringify(editPromptTypes.slice().sort()) !==
+        JSON.stringify([...editingProvider.supported_prompt_types].sort())
+      )
+        patch.supported_prompt_types = editPromptTypes;
+      if (
+        JSON.stringify(editResultTypes.slice().sort()) !==
         JSON.stringify([...editingProvider.supported_result_types].sort())
       )
         patch.supported_result_types = editResultTypes;
@@ -214,7 +243,7 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
       if (editIsActive !== editingProvider.is_active) patch.is_active = editIsActive;
 
       if (Object.keys(patch).length > 0) {
-        await updateInferenceProvider(projectId, editingProvider.id, patch);
+        await updateInteractiveProvider(projectId, editingProvider.id, patch);
         await fetchProviders();
         toast.success("Provider updated.");
       }
@@ -231,7 +260,7 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await deleteInferenceProvider(projectId, deleteTarget.id);
+      await deleteInteractiveProvider(projectId, deleteTarget.id);
       setDeleteTarget(null);
       await fetchProviders();
       toast.success("Provider deleted.");
@@ -244,7 +273,7 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
 
   // ---- Render ----
   if (!isSupervisor) {
-    return null; // Developer page already handles the non-supervisor banner
+    return null;
   }
 
   return (
@@ -253,12 +282,12 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-foreground">
-            Inference Providers
+            Interactive Providers
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Configure AI/ML inference services that can automatically annotate
-            images in this project. Global providers (managed by administrators)
-            are shown but cannot be edited here.
+            Configure interactive (SAM-style) inference services that respond to
+            user prompts in real time. Global providers are shown but cannot be
+            edited here.
           </p>
         </div>
         <Button
@@ -281,10 +310,10 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
       >
         <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-xl">
           <DialogHeader className="shrink-0 border-b px-6 py-4">
-            <DialogTitle>Create Inference Provider</DialogTitle>
+            <DialogTitle>Create Interactive Provider</DialogTitle>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-            <ProviderForm
+            <InteractiveProviderForm
               name={newName}
               onNameChange={setNewName}
               url={newUrl}
@@ -293,6 +322,8 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
               onModelNameChange={setNewModelName}
               description={newDescription}
               onDescriptionChange={setNewDescription}
+              promptTypes={newPromptTypes}
+              onPromptTypesChange={setNewPromptTypes}
               resultTypes={newResultTypes}
               onResultTypesChange={setNewResultTypes}
               authType={newAuthType}
@@ -325,6 +356,7 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
                 creating ||
                 !newName.trim() ||
                 !newUrl.trim() ||
+                newPromptTypes.length === 0 ||
                 newResultTypes.length === 0
               }
             >
@@ -344,7 +376,7 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
         </div>
       ) : providers.length === 0 ? (
         <div className="rounded-md border bg-muted/30 px-4 py-12 text-center text-sm text-muted-foreground">
-          No inference providers configured. Create one or ask an administrator
+          No interactive providers configured. Create one or ask an administrator
           to add a global provider.
         </div>
       ) : (
@@ -354,15 +386,10 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
               <TableRow className="bg-muted/50 hover:bg-muted/50">
                 <TableHead className="px-3 py-2">Name</TableHead>
                 <TableHead className="px-3 py-2">Model</TableHead>
-                <TableHead className="px-3 py-2">
-                  Result Types
-                </TableHead>
-                <TableHead className="px-3 py-2">
-                  Active
-                </TableHead>
-                <TableHead className="px-3 py-2">
-                  Actions
-                </TableHead>
+                <TableHead className="px-3 py-2">Prompt Types</TableHead>
+                <TableHead className="px-3 py-2">Result Types</TableHead>
+                <TableHead className="px-3 py-2">Active</TableHead>
+                <TableHead className="px-3 py-2">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -386,6 +413,25 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
                   {/* Model */}
                   <TableCell className="px-3 py-2 text-muted-foreground">
                     {p.model_name || "—"}
+                  </TableCell>
+
+                  {/* Prompt Types */}
+                  <TableCell className="px-3 py-2">
+                    <div className="flex gap-1 flex-wrap">
+                      {p.supported_prompt_types.map((pt) => (
+                        <Badge
+                          key={pt}
+                          variant="outline"
+                          className={cn(
+                            "text-[10px]",
+                            PROMPT_TYPE_COLORS[pt] ??
+                              "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {pt.replace(/_/g, " ")}
+                        </Badge>
+                      ))}
+                    </div>
                   </TableCell>
 
                   {/* Result Types */}
@@ -465,10 +511,10 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
       >
         <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-xl">
           <DialogHeader className="shrink-0 border-b px-6 py-4">
-            <DialogTitle>Edit Inference Provider</DialogTitle>
+            <DialogTitle>Edit Interactive Provider</DialogTitle>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-            <ProviderForm
+            <InteractiveProviderForm
               name={editName}
               onNameChange={setEditName}
               url={editUrl}
@@ -477,6 +523,8 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
               onModelNameChange={setEditModelName}
               description={editDescription}
               onDescriptionChange={setEditDescription}
+              promptTypes={editPromptTypes}
+              onPromptTypesChange={setEditPromptTypes}
               resultTypes={editResultTypes}
               onResultTypesChange={setEditResultTypes}
               authType={editAuthType}
@@ -509,6 +557,7 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
                 saving ||
                 !editName.trim() ||
                 !editUrl.trim() ||
+                editPromptTypes.length === 0 ||
                 editResultTypes.length === 0
               }
             >
@@ -521,10 +570,10 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
       {/* Delete confirmation */}
       <ConfirmDialog
         open={deleteTarget !== null}
-        title="Delete Inference Provider"
+        title="Delete Interactive Provider"
         message={
           deleteTarget
-            ? `Are you sure you want to delete the inference provider "${deleteTarget.name}"? Runs that were using this provider will not be affected, but no new runs can be started with it.`
+            ? `Are you sure you want to delete the interactive provider "${deleteTarget.name}"? Sessions that were using this provider will not be affected, but no new sessions can be started with it.`
             : ""
         }
         confirmLabel={deleting ? "Deleting…" : "Delete"}
@@ -537,7 +586,7 @@ export function ProviderSection({ projectId, isSupervisor }: Props) {
 
 // ---- Reusable form fields ----
 
-interface ProviderFormProps {
+interface InteractiveProviderFormProps {
   name: string;
   onNameChange: (v: string) => void;
   url: string;
@@ -546,10 +595,12 @@ interface ProviderFormProps {
   onModelNameChange: (v: string) => void;
   description: string;
   onDescriptionChange: (v: string) => void;
-  resultTypes: ResultType[];
-  onResultTypesChange: (v: ResultType[]) => void;
-  authType: ProviderAuthType;
-  onAuthTypeChange: (v: ProviderAuthType) => void;
+  promptTypes: InteractivePromptType[];
+  onPromptTypesChange: (v: InteractivePromptType[]) => void;
+  resultTypes: InteractiveResultType[];
+  onResultTypesChange: (v: InteractiveResultType[]) => void;
+  authType: "none" | "header" | "query";
+  onAuthTypeChange: (v: "none" | "header" | "query") => void;
   authParam: string;
   onAuthParamChange: (v: string) => void;
   authSecret: string;
@@ -559,11 +610,9 @@ interface ProviderFormProps {
   isActive: boolean;
   onIsActiveChange: (v: boolean) => void;
   isGlobal: boolean;
-  hideBasicFields?: boolean;
-  children?: React.ReactNode;
 }
 
-function ProviderForm({
+function InteractiveProviderForm({
   name,
   onNameChange,
   url,
@@ -572,6 +621,8 @@ function ProviderForm({
   onModelNameChange,
   description,
   onDescriptionChange,
+  promptTypes,
+  onPromptTypesChange,
   resultTypes,
   onResultTypesChange,
   authType,
@@ -585,87 +636,102 @@ function ProviderForm({
   isActive,
   onIsActiveChange,
   isGlobal,
-  hideBasicFields,
-  children,
-}: ProviderFormProps) {
+}: InteractiveProviderFormProps) {
   return (
     <div className="mt-3 flex flex-col gap-3">
-      {!hideBasicFields && (
-        <>
-          {/* Name */}
-          <Field label="Name">
-            <Input
-              type="text"
-              value={name}
-              onChange={(e) => onNameChange(e.target.value)}
-              placeholder="e.g. YOLOv8"
-              disabled={isGlobal}
-            />
-          </Field>
-          {/* Base URL */}
-          <Field label="Base URL">
-            <Input
-              type="url"
-              value={url}
-              onChange={(e) => onUrlChange(e.target.value)}
-              placeholder="https://infer.example.com"
-              disabled={isGlobal}
-            />
-          </Field>
-          {/* Model Name */}
-          <Field label="Model Name (optional)">
-            <Input
-              type="text"
-              value={modelName}
-              onChange={(e) => onModelNameChange(e.target.value)}
-              placeholder="e.g. SAM-2"
-              disabled={isGlobal}
-            />
-          </Field>
-          {/* Description */}
-          <Field label="Description (optional)">
-            <Input
-              type="text"
-              value={description}
-              onChange={(e) => onDescriptionChange(e.target.value)}
-              placeholder="Short description"
-              disabled={isGlobal}
-            />
-          </Field>
-          {/* Result Types */}
-          <Field label="Supported Result Types">
-            <div className="flex gap-3">
-              {ALL_RESULT_TYPES.map((rt) => (
-                <label
-                  key={rt}
-                  className="inline-flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Checkbox
-                    checked={resultTypes.includes(rt)}
-                    onCheckedChange={() => {
-                      if (resultTypes.includes(rt)) {
-                        onResultTypesChange(
-                          resultTypes.filter((t) => t !== rt)
-                        );
-                      } else {
-                        onResultTypesChange([...resultTypes, rt]);
-                      }
-                    }}
-                    disabled={isGlobal}
-                  />
-                  <span className="text-xs">{rt}</span>
-                </label>
-              ))}
-            </div>
-          </Field>
-        </>
-      )}
+      {/* Name */}
+      <Field label="Name">
+        <Input
+          type="text"
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+          placeholder="e.g. SAM-2 Interactive"
+          disabled={isGlobal}
+        />
+      </Field>
+      {/* Base URL */}
+      <Field label="Base URL">
+        <Input
+          type="url"
+          value={url}
+          onChange={(e) => onUrlChange(e.target.value)}
+          placeholder="https://infer.example.com"
+          disabled={isGlobal}
+        />
+      </Field>
+      {/* Model Name */}
+      <Field label="Model Name (optional)">
+        <Input
+          type="text"
+          value={modelName}
+          onChange={(e) => onModelNameChange(e.target.value)}
+          placeholder="e.g. vit_h"
+          disabled={isGlobal}
+        />
+      </Field>
+      {/* Description */}
+      <Field label="Description (optional)">
+        <Input
+          type="text"
+          value={description}
+          onChange={(e) => onDescriptionChange(e.target.value)}
+          placeholder="Short description"
+          disabled={isGlobal}
+        />
+      </Field>
+
+      {/* Prompt Types */}
+      <Field label="Supported Prompt Types">
+        <div className="flex gap-3 flex-wrap">
+          {ALL_PROMPT_TYPES.map((pt) => (
+            <label
+              key={pt}
+              className="inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <Checkbox
+                checked={promptTypes.includes(pt)}
+                onCheckedChange={() => {
+                  if (promptTypes.includes(pt)) {
+                    onPromptTypesChange(promptTypes.filter((t) => t !== pt));
+                  } else {
+                    onPromptTypesChange([...promptTypes, pt]);
+                  }
+                }}
+                disabled={isGlobal}
+              />
+              <span className="text-xs">{pt.replace(/_/g, " ")}</span>
+            </label>
+          ))}
+        </div>
+      </Field>
+
+      {/* Result Types */}
+      <Field label="Supported Result Types">
+        <div className="flex gap-3">
+          {ALL_RESULT_TYPES.map((rt) => (
+            <label
+              key={rt}
+              className="inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <Checkbox
+                checked={resultTypes.includes(rt)}
+                onCheckedChange={() => {
+                  if (resultTypes.includes(rt)) {
+                    onResultTypesChange(resultTypes.filter((t) => t !== rt));
+                  } else {
+                    onResultTypesChange([...resultTypes, rt]);
+                  }
+                }}
+                disabled={isGlobal}
+              />
+              <span className="text-xs">{rt}</span>
+            </label>
+          ))}
+        </div>
+      </Field>
 
       {/* Auth section */}
-      <FieldSet
-        className="rounded-md border p-3"
-        disabled={isGlobal}
-      >
+      <FieldSet className="rounded-md border p-3" disabled={isGlobal}>
         <FieldLegend variant="label" className="px-1 text-xs">
           Authentication
         </FieldLegend>
@@ -673,9 +739,7 @@ function ProviderForm({
           <Field label="Auth Type">
             <Select
               value={authType}
-              onValueChange={(v) =>
-                onAuthTypeChange(v as ProviderAuthType)
-              }
+              onValueChange={(v) => onAuthTypeChange(v as "none" | "header" | "query")}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -700,11 +764,7 @@ function ProviderForm({
                   type="text"
                   value={authParam}
                   onChange={(e) => onAuthParamChange(e.target.value)}
-                  placeholder={
-                    authType === "header"
-                      ? "Authorization"
-                      : "api_key"
-                  }
+                  placeholder={authType === "header" ? "Authorization" : "api_key"}
                 />
               </Field>
               <Field label="Secret">
@@ -740,11 +800,8 @@ function ProviderForm({
           checked={isActive}
           onCheckedChange={onIsActiveChange}
           disabled={isGlobal}
-
         />
       </Field>
-
-      {children}
     </div>
   );
 }

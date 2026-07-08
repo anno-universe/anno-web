@@ -43,6 +43,21 @@ export interface InteractiveProviderOutput {
   updated_at: string;
 }
 
+/** Partial update payload; all fields optional. ``auth_secret`` is write-only. */
+export interface InteractiveProviderUpdateInput {
+  name?: string | null;
+  inference_url?: string | null;
+  supported_prompt_types?: InteractivePromptType[] | null;
+  supported_result_types?: InteractiveResultType[] | null;
+  model_name?: string | null;
+  description?: string | null;
+  auth_type?: ("none" | "header" | "query") | null;
+  auth_param_name?: string | null;
+  auth_secret?: string | null;
+  timeout_seconds?: number | null;
+  is_active?: boolean | null;
+}
+
 /** Payload to create an interactive provider. */
 export interface InteractiveProviderCreateInput {
   name: string;
@@ -61,7 +76,6 @@ export interface InteractiveProviderCreateInput {
 /** Session start request body. */
 export interface InteractiveSessionStartInput {
   provider_id: number;
-  from_annotation_id?: number | null;
 }
 
 /** Returned when a session is opened — session state + token for direct calls. */
@@ -71,8 +85,6 @@ export interface InteractiveSessionStartOutput {
   image_id: number;
   provider_id: number;
   performed_by_id: number;
-  from_annotation_id: number | null;
-  to_annotation_id: number | null;
   status: string;
   error: string;
   created_at: string;
@@ -100,8 +112,6 @@ export interface InteractiveSessionOutput {
   image_id: number;
   provider_id: number;
   performed_by_id: number;
-  from_annotation_id: number | null;
-  to_annotation_id: number | null;
   status: string;
   error: string;
   created_at: string;

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { uploadImage } from "@/api/images";
+import { normalizeError } from "@/lib/utils/errors";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/ui/button";
 
@@ -22,7 +23,7 @@ export function ImageUploadButton({ projectId, onUploaded }: Props) {
       await uploadImage(projectId, file);
       onUploaded();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(normalizeError(err).message);
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";

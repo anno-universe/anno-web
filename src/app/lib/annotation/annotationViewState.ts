@@ -79,16 +79,28 @@ export function annotationViewReducer(
   switch (action.type) {
     // ---- Selection ----
     case "SELECT": {
-      // Blocked while editing (dirty) or drafting
-      if (state.type === "editing" || state.type === "drafting") return state;
+      // Blocked while drafting
+      if (state.type === "drafting") return state;
+      // Blocked while editing with dirty changes
+      if (
+        state.type === "editing" &&
+        (state.dirty.geometry || state.dirty.label)
+      )
+        return state;
       // Already viewing this annotation — no-op
       if (state.type === "viewing" && state.selectedId === action.annotationId) return state;
       return { type: "viewing", selectedId: action.annotationId };
     }
 
     case "DESELECT": {
-      // Blocked while editing or drafting
-      if (state.type === "editing" || state.type === "drafting") return state;
+      // Blocked while drafting
+      if (state.type === "drafting") return state;
+      // Blocked while editing with dirty changes
+      if (
+        state.type === "editing" &&
+        (state.dirty.geometry || state.dirty.label)
+      )
+        return state;
       return { type: "idle" };
     }
 
@@ -235,7 +247,8 @@ export function deriveViewState(state: AnnotationViewState): AnnotationViewDeriv
     state.type === "editing" ? state.dirty.geometry || state.dirty.label : false;
 
   const hasPendingWork =
-    (state.type === "editing" && (isDirty || state.pendingLabel !== null)) ||
+    (state.type === "editing" &&
+      (isDirty || state.pendingLabel !== state.originalSnapshot.label)) ||
     state.type === "drafting";
 
   return { selectedId, editingId, isDirty, hasPendingWork };

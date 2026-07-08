@@ -43,6 +43,7 @@ export type InteractiveState =
       type: "committing";
       session: InteractiveSessionStartOutput;
       candidate: InteractiveCandidate;
+      prompts: InteractivePrompt[];
       saving: boolean;
       label: number | null;
     }
@@ -72,7 +73,8 @@ export type InteractiveAction =
   | { type: "COMMIT_REQUEST" }
   | { type: "COMMIT_SUCCESS" }
   | { type: "COMMIT_FAILED"; error: string }
-  | { type: "DISCARD" };
+  | { type: "DISCARD" }
+  | { type: "RETRY" };
 
 // ---------------------------------------------------------------------------
 // Reducer
@@ -93,7 +95,7 @@ export function interactiveReducer(
       return { type: "prompting", session: state.session, prompts: [] };
 
     case "SESSION_ERROR":
-      if (state.type === "idle" || state.type === "committing" && !("session" in state)) return state;
+      if (state.type === "idle") return state;
       return {
         type: "error",
         session: (state as { session: InteractiveSessionStartOutput }).session,
@@ -123,8 +125,17 @@ export function interactiveReducer(
 
     case "POP_PROMPT":
       if (state.type !== "prompting" && state.type !== "reviewing") return state;
+      if (state.type === "reviewing") {
+        // Discard candidate and return to prompting
+        return {
+          type: "prompting",
+          session: state.session,
+          prompts: state.prompts.slice(0, -1),
+        };
+      }
       return {
         ...state,
+        type: "prompting",
         prompts: state.prompts.slice(0, -1),
       };
 
@@ -153,19 +164,22 @@ export function interactiveReducer(
       return { ...state, label: action.label };
 
     case "COMMIT_REQUEST":
-      if (state.type !== "reviewing" && state.type !== "loading") return state;
+      if (state.type !== "reviewing") return state;
       return {
         type: "committing",
         session: state.session,
-        candidate: ("candidate" in state ? state.candidate : null) as InteractiveCandidate,
+        candidate: state.candidate,
+        prompts: state.prompts,
         saving: true,
-        label:
-          "candidate" in state && state.candidate ? state.candidate.label : null,
+        label: state.candidate.label,
       };
 
     case "COMMIT_SUCCESS":
       if (state.type !== "committing") return state;
-      return { type: "idle" };
+      // Return to prompting with an empty prompt set so the user can continue
+      // interactive segmentation. One session produces many annotations; only
+      // an explicit discard ends it.
+      return { type: "prompting", session: state.session, prompts: [] };
 
     case "COMMIT_FAILED":
       if (state.type !== "committing") return state;
@@ -173,8 +187,17 @@ export function interactiveReducer(
         type: "error",
         session: state.session,
         error: action.error,
-        prompts: [],
+        prompts: state.prompts,
         recoverable: true,
+      };
+
+    // -- retry ---------------------------------------------------------------
+    case "RETRY":
+      if (state.type !== "error" || !state.recoverable) return state;
+      return {
+        type: "prompting",
+        session: state.session,
+        prompts: state.prompts,
       };
 
     default:

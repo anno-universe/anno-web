@@ -1,7 +1,9 @@
-import { apiGet, apiPost } from "@/api/client";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/api/client";
 import type { PaginatedResponse, PaginationParams } from "@/types/api";
 import type {
   InteractiveProviderOutput,
+  InteractiveProviderCreateInput,
+  InteractiveProviderUpdateInput,
   InteractiveSessionStartOutput,
   InteractiveSessionStartInput,
   InteractiveSessionOutput,
@@ -20,6 +22,36 @@ export function getInteractiveProviders(
   return apiGet<PaginatedResponse<InteractiveProviderOutput>>(
     `/api/projects/${projectId}/interactive-providers/`,
     params as Record<string, unknown>
+  );
+}
+
+export function createInteractiveProvider(
+  projectId: number,
+  input: InteractiveProviderCreateInput
+): Promise<InteractiveProviderOutput> {
+  return apiPost<InteractiveProviderOutput>(
+    `/api/projects/${projectId}/interactive-providers/`,
+    input
+  );
+}
+
+export function updateInteractiveProvider(
+  projectId: number,
+  providerId: number,
+  input: InteractiveProviderUpdateInput
+): Promise<InteractiveProviderOutput> {
+  return apiPatch<InteractiveProviderOutput>(
+    `/api/projects/${projectId}/interactive-providers/${providerId}`,
+    input
+  );
+}
+
+export function deleteInteractiveProvider(
+  projectId: number,
+  providerId: number
+): Promise<void> {
+  return apiDelete(
+    `/api/projects/${projectId}/interactive-providers/${providerId}`
   );
 }
 
