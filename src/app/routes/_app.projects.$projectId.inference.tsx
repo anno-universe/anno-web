@@ -35,6 +35,7 @@ import { RunStatusBadge } from "@/components/inference/RunStatusBadge";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { normalizeError } from "@/lib/utils/errors";
 import type { ProjectContext } from "./_app.projects.$projectId";
 import type { InferenceProviderOutput } from "@/types/inferenceProvider";
 import type { RunOutput } from "@/types/inferenceRun";
@@ -183,7 +184,7 @@ export default function ProjectInferencePage() {
       toast.success(`Inference run #${run.id} started for ${run.total_items} images.`);
       await fetchRuns();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to start inference run");
+      toast.error(normalizeError(err).message);
     } finally {
       setStarting(false);
     }

@@ -30,6 +30,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ProviderSection } from "@/components/inference/ProviderSection";
+import { InteractiveProviderSection } from "@/components/inference/InteractiveProviderSection";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -273,6 +274,7 @@ export default function ProjectDeveloperPage() {
                 onDateChange={setNewKeyExpires}
                 placeholder="No expiration"
                 disabled={creating}
+                fromDate={new Date()}
               />
             </Field>
           </div>
@@ -340,6 +342,7 @@ export default function ProjectDeveloperPage() {
                 onDateChange={setEditExpires}
                 placeholder="No expiration"
                 disabled={saving}
+                fromDate={new Date()}
               />
             </Field>
           </div>
@@ -502,6 +505,9 @@ export default function ProjectDeveloperPage() {
 
       {/* Inference provider configuration */}
       <ProviderSection projectId={id} isSupervisor={isSupervisor} />
+
+      {/* Interactive inference provider configuration */}
+      <InteractiveProviderSection projectId={id} isSupervisor={isSupervisor} />
 
       {/* Delete confirmation */}
       <ConfirmDialog

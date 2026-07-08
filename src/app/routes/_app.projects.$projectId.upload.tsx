@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useParams, useOutletContext } from "react-router";
 import { CheckCircle, AlertCircle, X, Loader2 } from "lucide-react";
+import { normalizeError } from "@/lib/utils/errors";
 import { uploadImage } from "@/api/images";
 import { ImageUploadZone } from "@/components/image/ImageUploadZone";
 import { Button } from "@/components/ui/button";
@@ -174,7 +175,7 @@ export default function UploadPage() {
           )
         );
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Upload failed";
+        const message = normalizeError(err).message;
         setFiles((prev) =>
           prev.map((f) =>
             f.id === entry.id

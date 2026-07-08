@@ -30,6 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { normalizeError } from "@/lib/utils/errors";
 import type { InferenceProviderOutput } from "@/types/inferenceProvider";
 import { TERMINAL_RUN_STATUSES } from "@/types/inferenceRun";
 
@@ -192,9 +193,7 @@ export function InferenceModal({
       }, 2000);
     } catch (err: unknown) {
       setStarting(false);
-      setError(
-        err instanceof Error ? err.message : "Failed to start inference"
-      );
+      setError(normalizeError(err).message);
       setPhase("error");
     }
   }
