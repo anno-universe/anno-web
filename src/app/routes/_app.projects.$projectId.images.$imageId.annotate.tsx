@@ -3,8 +3,12 @@ import { useParams, useNavigate } from "react-router";
 import { createPortal } from "react-dom";
 import { Pencil, Trash2 } from "lucide-react";
 import { getProject } from "@/api/projects";
-import { getImage, getImages, getOriginalImageUrl } from "@/api/images";
-import { apiGetBlob } from "@/api/client";
+import {
+  getImage,
+  getImages,
+  getOriginalImageUrl,
+  fetchOriginalImageUrl,
+} from "@/api/images";
 import {
   getAnnotations,
   createAnnotation,
@@ -217,7 +221,8 @@ export default function AnnotatePage() {
 
         // 3. Upload the image to the service (cache the embedding)
         try {
-          const blob = await apiGetBlob(getOriginalImageUrl(pid, iid));
+          const presignedUrl = await fetchOriginalImageUrl(pid, iid);
+          const blob = await fetch(presignedUrl).then((r) => r.blob());
           await svc.inferImage(blob, {
             image_id: iid,
             session_id: session.id,

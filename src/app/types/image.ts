@@ -13,3 +13,8 @@ export interface Image2DOutput {
   created_at: string;
   updated_at: string;
 }
+
+/** Short-lived pre-signed URL for loading an original image directly. */
+export interface ImageURLOutput {
+  url: string;
+}

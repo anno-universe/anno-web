@@ -1,6 +1,6 @@
 import { apiGet, apiPostForm } from "./client";
 import type { PaginatedResponse, PaginationParams } from "@/types/api";
-import type { Image2DOutput } from "@/types/image";
+import type { Image2DOutput, ImageURLOutput } from "@/types/image";
 
 export function getImages(
   projectId: number,
@@ -38,6 +38,21 @@ export function getOriginalImageUrl(
   imageId: number
 ): string {
   return `/api/projects/${projectId}/images/${imageId}/original_image`;
+}
+
+/**
+ * Resolve the short-lived, pre-signed URL for an original image. The backend
+ * checks project membership, then returns a URL the browser loads directly
+ * from RustFS-behind-Caddy (no bytes proxied through the API layer).
+ */
+export async function fetchOriginalImageUrl(
+  projectId: number,
+  imageId: number
+): Promise<string> {
+  const { url } = await apiGet<ImageURLOutput>(
+    getOriginalImageUrl(projectId, imageId)
+  );
+  return url;
 }
 
 export function getThumbnailUrl(

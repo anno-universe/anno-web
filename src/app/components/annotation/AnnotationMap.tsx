@@ -21,7 +21,8 @@ import Modify from "ol/interaction/Modify";
 import DoubleClickZoom from "ol/interaction/DoubleClickZoom";
 import type { default as OLMap } from "ol/Map";
 import { unByKey } from "ol/Observable";
-import { apiGetBlob } from "@/api/client";
+import { apiGet } from "@/api/client";
+import type { ImageURLOutput } from "@/types/image";
 
 // Sentinel id for the not-yet-committed annotation being drawn (awaiting a
 // label). Negative so it never collides with real backend ids.
@@ -233,7 +234,6 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       useRef<ReturnType<typeof createDrawBoxInteraction> | null>(null);
     const drawPolygonRef =
       useRef<ReturnType<typeof createDrawPolygonInteraction> | null>(null);
-    const blobUrlRef = useRef<string | null>(null);
     const overlayRef = useRef<Overlay | null>(null);
     const overlayDivRef = useRef<HTMLElement | null>(null);
     const dblClickZoomRef = useRef<DoubleClickZoom | null>(null);
@@ -817,13 +817,11 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         overlayRef.current = overlay;
       }
 
-      // Load authenticated image blob, then create image layer
+      // Resolve the pre-signed URL, then let OpenLayers load the image
+      // directly from RustFS-behind-Caddy (no bytes proxied through the API).
       let disposed = false;
-      apiGetBlob(imageUrl).then((blob) => {
+      apiGet<ImageURLOutput>(imageUrl).then(({ url }) => {
         if (disposed) return;
-        const url = URL.createObjectURL(blob);
-        if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
-        blobUrlRef.current = url;
 
         const imageLayer = new ImageLayer({
           source: new StaticImage({
@@ -896,7 +894,6 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
           window.cancelAnimationFrame(positionOverlayFrameRef.current);
           positionOverlayFrameRef.current = null;
         }
-        if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
         map.setTarget(undefined);
         mapRef.current = null;
         overlayRef.current = null;
