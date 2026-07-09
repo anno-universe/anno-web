@@ -1,6 +1,6 @@
-import { apiGet, apiPostForm } from "./client";
+import { apiGet, apiPostForm, apiGetBlob } from "./client";
 import type { PaginatedResponse, PaginationParams } from "@/types/api";
-import type { Image2DOutput, ImageURLOutput } from "@/types/image";
+import type { Image2DOutput } from "@/types/image";
 
 export function getImages(
   projectId: number,
@@ -41,18 +41,17 @@ export function getOriginalImageUrl(
 }
 
 /**
- * Resolve the short-lived, pre-signed URL for an original image. The backend
- * checks project membership, then returns a URL the browser loads directly
- * from RustFS-behind-Caddy (no bytes proxied through the API layer).
+ * Fetch original image bytes (authenticated) and return a blob object URL.
+ * The backend now returns the image bytes directly via FileResponse.
  */
-export async function fetchOriginalImageUrl(
+export async function fetchOriginalImageBlob(
   projectId: number,
   imageId: number
 ): Promise<string> {
-  const { url } = await apiGet<ImageURLOutput>(
+  const blob = await apiGetBlob(
     getOriginalImageUrl(projectId, imageId)
   );
-  return url;
+  return URL.createObjectURL(blob);
 }
 
 export function getThumbnailUrl(
