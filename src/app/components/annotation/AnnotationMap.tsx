@@ -21,8 +21,7 @@ import Modify from "ol/interaction/Modify";
 import DoubleClickZoom from "ol/interaction/DoubleClickZoom";
 import type { default as OLMap } from "ol/Map";
 import { unByKey } from "ol/Observable";
-import { apiGet } from "@/api/client";
-import type { ImageURLOutput } from "@/types/image";
+import { apiGetBlob } from "@/api/client";
 
 // Sentinel id for the not-yet-committed annotation being drawn (awaiting a
 // label). Negative so it never collides with real backend ids.
@@ -261,6 +260,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     const pointerFrameRef = useRef<number | null>(null);
     const latestPointerCoordinateRef = useRef<number[] | null>(null);
     const positionOverlayFrameRef = useRef<number | null>(null);
+    const imageBlobUrlRef = useRef<string | null>(null);
 
     // Mirrors of props/callbacks read inside long-lived interaction closures
     const activeToolRef = useRef(activeTool);
@@ -817,11 +817,14 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         overlayRef.current = overlay;
       }
 
-      // Resolve the pre-signed URL, then let OpenLayers load the image
-      // directly from RustFS-behind-Caddy (no bytes proxied through the API).
+      // Fetch image bytes (authenticated) via blob, create an object URL
+      // for OpenLayers StaticImage.
       let disposed = false;
-      apiGet<ImageURLOutput>(imageUrl).then(({ url }) => {
+      apiGetBlob(imageUrl).then((blob) => {
         if (disposed) return;
+
+        const url = URL.createObjectURL(blob);
+        imageBlobUrlRef.current = url;
 
         const imageLayer = new ImageLayer({
           source: new StaticImage({
@@ -893,6 +896,10 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         if (positionOverlayFrameRef.current != null) {
           window.cancelAnimationFrame(positionOverlayFrameRef.current);
           positionOverlayFrameRef.current = null;
+        }
+        if (imageBlobUrlRef.current) {
+          URL.revokeObjectURL(imageBlobUrlRef.current);
+          imageBlobUrlRef.current = null;
         }
         map.setTarget(undefined);
         mapRef.current = null;

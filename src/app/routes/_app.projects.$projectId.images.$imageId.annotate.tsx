@@ -1,14 +1,15 @@
 import { useEffect, useState, useRef, useCallback, useMemo, useReducer } from "react";
 import { useParams, useNavigate } from "react-router";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import { Pencil, Trash2 } from "lucide-react";
 import { getProject } from "@/api/projects";
 import {
   getImage,
   getImages,
   getOriginalImageUrl,
-  fetchOriginalImageUrl,
 } from "@/api/images";
+import { apiGetBlob } from "@/api/client";
 import {
   getAnnotations,
   createAnnotation,
@@ -112,7 +113,6 @@ export default function AnnotatePage() {
     commitDraftFailed,
     setDraftLabel,
     discardDraft: discardDraftDispatch,
-    clearError,
   } = useAnnotationViewState();
 
   // ---- Tool / viewport state (not part of annotation state machine) ----
@@ -173,7 +173,7 @@ export default function AnnotatePage() {
   const blockPendingWork = useCallback(() => {
     const s = stateRef.current;
     if (s.type === "drafting") {
-      setError("Save or discard the pending annotation before continuing.");
+      toast.error("Save or discard the pending annotation before continuing.");
       return true;
     }
     if (s.type === "editing") {
@@ -182,12 +182,12 @@ export default function AnnotatePage() {
         s.dirty.label ||
         s.pendingLabel !== s.originalSnapshot.label
       ) {
-        setError("Save or revert the current edit before continuing.");
+        toast.error("Save or revert the current edit before continuing.");
         return true;
       }
     }
     if (keypointDraftCountRef.current > 0) {
-      setError("Finish or cancel the current keypoint before continuing.");
+      toast.error("Finish or cancel the current keypoint before continuing.");
       return true;
     }
     return false;
@@ -221,8 +221,7 @@ export default function AnnotatePage() {
 
         // 3. Upload the image to the service (cache the embedding)
         try {
-          const presignedUrl = await fetchOriginalImageUrl(pid, iid);
-          const blob = await fetch(presignedUrl).then((r) => r.blob());
+          const blob = await apiGetBlob(getOriginalImageUrl(pid, iid));
           await svc.inferImage(blob, {
             image_id: iid,
             session_id: session.id,
@@ -234,7 +233,7 @@ export default function AnnotatePage() {
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : "Failed to upload image";
           dispatchInteractive({ type: "SESSION_ERROR", error: msg });
-          setError(msg);
+          toast.error(msg);
           setShowInteractiveModal(false);
           return;
         }
@@ -245,7 +244,7 @@ export default function AnnotatePage() {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Failed to start interactive session";
         dispatchInteractive({ type: "SESSION_ERROR", error: msg });
-        setError(msg);
+        toast.error(msg);
         setShowInteractiveModal(false);
       }
     },
@@ -304,7 +303,7 @@ export default function AnnotatePage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Prediction failed";
       dispatchInteractive({ type: "SESSION_ERROR", error: msg });
-      setError(msg);
+      toast.error(msg);
     }
   }, [iid, project, image]);
 
@@ -337,7 +336,7 @@ export default function AnnotatePage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Commit failed";
       dispatchInteractive({ type: "COMMIT_FAILED", error: msg });
-      setError(msg);
+      toast.error(msg);
     }
   }, [pid, iid, samCandidateLabel, refreshOperations]);
 
@@ -373,7 +372,7 @@ export default function AnnotatePage() {
       const s = stateRef.current;
       // Blocked while drafting
       if (s.type === "drafting") {
-        setError("Save or discard the pending annotation before selecting another.");
+        toast.error("Save or discard the pending annotation before selecting another.");
         return;
       }
       // Blocked while editing with dirty changes
@@ -383,7 +382,7 @@ export default function AnnotatePage() {
           s.dirty.label ||
           s.pendingLabel !== s.originalSnapshot.label
         ) {
-          setError("Save or revert the current edit before selecting another.");
+          toast.error("Save or revert the current edit before selecting another.");
           return;
         }
       }
@@ -404,7 +403,7 @@ export default function AnnotatePage() {
       const s = stateRef.current;
       // Blocked while drafting
       if (s.type === "drafting") {
-        setError("Save or discard the pending annotation before editing.");
+        toast.error("Save or discard the pending annotation before editing.");
         return;
       }
       // Blocked while editing another annotation with dirty changes
@@ -415,7 +414,7 @@ export default function AnnotatePage() {
           s.dirty.label ||
           s.pendingLabel !== s.originalSnapshot.label)
       ) {
-        setError("Save or revert the current edit before editing another annotation.");
+        toast.error("Save or revert the current edit before editing another annotation.");
         return;
       }
       // If already editing this annotation, no-op
@@ -424,7 +423,7 @@ export default function AnnotatePage() {
       // Capture geometry snapshot BEFORE dispatching START_EDIT
       const snap = mapRef.current?.captureAnnotationSnapshot(id);
       if (!snap) {
-        setError("Cannot edit — annotation not found on map.");
+        toast.error("Cannot edit — annotation not found on map.");
         return;
       }
 
@@ -468,6 +467,7 @@ export default function AnnotatePage() {
       // handleModify will call saveEditSuccess or saveEditFailed
     } catch {
       saveEditFailed("Failed to save");
+      toast.error("Failed to save");
     } finally {
       savingRef.current = false;
     }
@@ -607,7 +607,7 @@ export default function AnnotatePage() {
         return created;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Failed to create";
-        setError(msg);
+        toast.error(msg);
         return null;
       }
     },
@@ -618,7 +618,7 @@ export default function AnnotatePage() {
   const handleDrawComplete = useCallback(
     (input: Annotation2DCreateInput) => {
       if (stateRef.current.type === "drafting") {
-        setError("Save or discard the pending annotation before drawing another.");
+        toast.error("Save or discard the pending annotation before drawing another.");
         return;
       }
       startDraft(input);
@@ -700,7 +700,7 @@ export default function AnnotatePage() {
         if (s.type === "editing" && s.saving) {
           saveEditFailed(msg);
         } else {
-          setError(msg);
+          toast.error(msg);
         }
       }
     },
@@ -725,7 +725,7 @@ export default function AnnotatePage() {
     (annotationId: number) => {
       const s = stateRef.current;
       if (s.type === "drafting") {
-        setError("Save or discard the pending annotation before deleting.");
+        toast.error("Save or discard the pending annotation before deleting.");
         return;
       }
       if (
@@ -735,7 +735,7 @@ export default function AnnotatePage() {
           s.dirty.label ||
           s.pendingLabel !== s.originalSnapshot.label)
       ) {
-        setError("Save or revert the current edit before deleting.");
+        toast.error("Save or revert the current edit before deleting.");
         return;
       }
       setDeleteTargetId(annotationId);
@@ -765,7 +765,7 @@ export default function AnnotatePage() {
       refreshOperations();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to delete";
-      setError(msg);
+      toast.error(msg);
       setShowDeleteConfirm(false);
       setDeleteTargetId(null);
     }
@@ -776,7 +776,7 @@ export default function AnnotatePage() {
     async (annotationId: number) => {
       const s = stateRef.current;
       if (s.type === "drafting") {
-        setError("Save or discard the pending annotation before deleting.");
+        toast.error("Save or discard the pending annotation before deleting.");
         return;
       }
       if (
@@ -786,7 +786,7 @@ export default function AnnotatePage() {
           s.dirty.label ||
           s.pendingLabel !== s.originalSnapshot.label)
       ) {
-        setError("Save or revert the current edit before deleting.");
+        toast.error("Save or revert the current edit before deleting.");
         return;
       }
       try {
@@ -803,7 +803,7 @@ export default function AnnotatePage() {
         refreshOperations();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Failed to delete";
-        setError(msg);
+        toast.error(msg);
       }
     },
     [pid, iid, select]
@@ -817,7 +817,8 @@ export default function AnnotatePage() {
         const applied = await applyImageTag(pid, iid, { tag_id: tagId });
         setImageTags((prev) => [...prev, applied]);
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to apply tag");
+        const msg = err instanceof Error ? err.message : "Failed to apply tag";
+        toast.error(msg);
       }
     },
     [pid, iid]
@@ -829,7 +830,8 @@ export default function AnnotatePage() {
         await removeImageTag(pid, iid, tagId);
         setImageTags((prev) => prev.filter((t) => t.tag_id !== tagId));
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to remove tag");
+        const msg = err instanceof Error ? err.message : "Failed to remove tag";
+        toast.error(msg);
       }
     },
     [pid, iid]
@@ -1009,14 +1011,6 @@ export default function AnnotatePage() {
     state.type === "editing" ||
     state.type === "drafting";
 
-  // Show error from edit state
-  const editError =
-    state.type === "editing" ? state.error
-    : state.type === "drafting" ? state.error
-    : null;
-
-  const displayError = error || editError;
-
   // ---- Render ----
   if (loading) {
     return (
@@ -1056,11 +1050,6 @@ export default function AnnotatePage() {
         onRemoveTag={handleRemoveTag}
         currentUserId={user?.id}
         userRole={project?.my_role}
-        error={displayError || undefined}
-        onDismissError={() => {
-          setError("");
-          clearError();
-        }}
       />
 
       {/* Main area: Toolbar | Map | SidePanel */}

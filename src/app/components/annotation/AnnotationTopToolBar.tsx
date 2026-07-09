@@ -22,8 +22,6 @@ interface AnnotationTopToolBarProps {
   currentUserId?: number | null;
   /** Current user's project role — for tag removal ownership check */
   userRole?: string | null;
-  error?: string;
-  onDismissError: () => void;
 }
 
 /**
@@ -43,8 +41,6 @@ export function AnnotationTopToolBar({
   onRemoveTag,
   currentUserId,
   userRole,
-  error,
-  onDismissError,
 }: AnnotationTopToolBarProps) {
   const dimensions =
     image.width && image.height ? `(${image.width} × ${image.height})` : null;
@@ -91,7 +87,7 @@ export function AnnotationTopToolBar({
         </Tooltip>
       </div>
 
-      {/* Right: tags + error dismiss */}
+      {/* Right: tags */}
       <div className="flex items-center gap-3">
         <ImageTagBar
           imageTags={imageTags}
@@ -101,14 +97,6 @@ export function AnnotationTopToolBar({
           currentUserId={currentUserId}
           userRole={userRole}
         />
-        {error && (
-          <button
-            onClick={onDismissError}
-            className="text-xs text-destructive hover:underline"
-          >
-            {error} (dismiss)
-          </button>
-        )}
       </div>
     </div>
   );
