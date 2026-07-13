@@ -31,6 +31,8 @@ export interface InteractiveProviderOutput {
   model_name: string;
   description: string;
   inference_url: string;
+  /** Browser-reachable base URL for direct predict calls (e.g. "/infer"). Empty when unset. */
+  public_url: string;
   supported_prompt_types: InteractivePromptType[];
   supported_result_types: InteractiveResultType[];
   auth_type: "none" | "header" | "query";
@@ -47,6 +49,7 @@ export interface InteractiveProviderOutput {
 export interface InteractiveProviderUpdateInput {
   name?: string | null;
   inference_url?: string | null;
+  public_url?: string | null;
   supported_prompt_types?: InteractivePromptType[] | null;
   supported_result_types?: InteractiveResultType[] | null;
   model_name?: string | null;
@@ -62,6 +65,7 @@ export interface InteractiveProviderUpdateInput {
 export interface InteractiveProviderCreateInput {
   name: string;
   inference_url: string;
+  public_url?: string;
   supported_prompt_types: InteractivePromptType[];
   supported_result_types: InteractiveResultType[];
   model_name?: string;
