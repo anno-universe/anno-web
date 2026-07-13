@@ -91,6 +91,7 @@ export function InteractiveProviderSection({ projectId, isSupervisor }: Props) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newUrl, setNewUrl] = useState("");
+  const [newPublicUrl, setNewPublicUrl] = useState("");
   const [newModelName, setNewModelName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newPromptTypes, setNewPromptTypes] = useState<InteractivePromptType[]>([]);
@@ -106,6 +107,7 @@ export function InteractiveProviderSection({ projectId, isSupervisor }: Props) {
   const [editingProvider, setEditingProvider] = useState<InteractiveProviderOutput | null>(null);
   const [editName, setEditName] = useState("");
   const [editUrl, setEditUrl] = useState("");
+  const [editPublicUrl, setEditPublicUrl] = useState("");
   const [editModelName, setEditModelName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editPromptTypes, setEditPromptTypes] = useState<InteractivePromptType[]>([]);
@@ -144,6 +146,7 @@ export function InteractiveProviderSection({ projectId, isSupervisor }: Props) {
   function resetCreateForm() {
     setNewName("");
     setNewUrl("");
+    setNewPublicUrl("");
     setNewModelName("");
     setNewDescription("");
     setNewPromptTypes([]);
@@ -170,6 +173,7 @@ export function InteractiveProviderSection({ projectId, isSupervisor }: Props) {
       const input: InteractiveProviderCreateInput = {
         name: newName.trim(),
         inference_url: newUrl.trim(),
+        public_url: newPublicUrl.trim() || undefined,
         supported_prompt_types: newPromptTypes,
         supported_result_types: newResultTypes,
         model_name: newModelName.trim(),
@@ -196,6 +200,7 @@ export function InteractiveProviderSection({ projectId, isSupervisor }: Props) {
     setEditingProvider(p);
     setEditName(p.name);
     setEditUrl(p.inference_url);
+    setEditPublicUrl(p.public_url ?? "");
     setEditModelName(p.model_name);
     setEditDescription(p.description);
     setEditPromptTypes([...p.supported_prompt_types]);
@@ -220,6 +225,8 @@ export function InteractiveProviderSection({ projectId, isSupervisor }: Props) {
         patch.name = editName.trim();
       if (editUrl.trim() && editUrl.trim() !== editingProvider.inference_url)
         patch.inference_url = editUrl.trim();
+      if (editPublicUrl.trim() !== (editingProvider.public_url ?? ""))
+        patch.public_url = editPublicUrl.trim();
       if (editModelName.trim() !== (editingProvider.model_name ?? ""))
         patch.model_name = editModelName.trim() || null;
       if (editDescription.trim() !== (editingProvider.description ?? ""))
@@ -318,6 +325,8 @@ export function InteractiveProviderSection({ projectId, isSupervisor }: Props) {
               onNameChange={setNewName}
               url={newUrl}
               onUrlChange={setNewUrl}
+              publicUrl={newPublicUrl}
+              onPublicUrlChange={setNewPublicUrl}
               modelName={newModelName}
               onModelNameChange={setNewModelName}
               description={newDescription}
@@ -519,6 +528,8 @@ export function InteractiveProviderSection({ projectId, isSupervisor }: Props) {
               onNameChange={setEditName}
               url={editUrl}
               onUrlChange={setEditUrl}
+              publicUrl={editPublicUrl}
+              onPublicUrlChange={setEditPublicUrl}
               modelName={editModelName}
               onModelNameChange={setEditModelName}
               description={editDescription}
@@ -591,6 +602,8 @@ interface InteractiveProviderFormProps {
   onNameChange: (v: string) => void;
   url: string;
   onUrlChange: (v: string) => void;
+  publicUrl: string;
+  onPublicUrlChange: (v: string) => void;
   modelName: string;
   onModelNameChange: (v: string) => void;
   description: string;
@@ -617,6 +630,8 @@ function InteractiveProviderForm({
   onNameChange,
   url,
   onUrlChange,
+  publicUrl,
+  onPublicUrlChange,
   modelName,
   onModelNameChange,
   description,
@@ -658,6 +673,20 @@ function InteractiveProviderForm({
           placeholder="https://infer.example.com"
           disabled={isGlobal}
         />
+      </Field>
+      {/* Public URL (browser) */}
+      <Field label="Public URL (optional)">
+        <Input
+          type="text"
+          value={publicUrl}
+          onChange={(e) => onPublicUrlChange(e.target.value)}
+          placeholder="/_interactive_infer"
+          disabled={isGlobal}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Browser-reachable base URL for direct predict calls (e.g. a reverse-proxy
+          path like <code>/_interactive_infer</code>). Leave blank to use the base URL.
+        </p>
       </Field>
       {/* Model Name */}
       <Field label="Model Name (optional)">
