@@ -38,6 +38,7 @@ export type InteractiveState =
       session: InteractiveSessionStartOutput;
       prompts: InteractivePrompt[];
       candidate: InteractiveCandidate;
+      overriddenLabel: number | null;
     }
   | {
       type: "committing";
@@ -151,6 +152,7 @@ export function interactiveReducer(
         session: state.session,
         prompts: state.prompts,
         candidate: action.candidate,
+        overriddenLabel: null,
       };
 
     // -- refine (add more prompts to a candidate) ---------------------------
@@ -160,6 +162,9 @@ export function interactiveReducer(
 
     // -- commit -------------------------------------------------------------
     case "SET_LABEL":
+      if (state.type === "reviewing") {
+        return { ...state, overriddenLabel: action.label };
+      }
       if (state.type !== "committing") return state;
       return { ...state, label: action.label };
 
@@ -171,7 +176,7 @@ export function interactiveReducer(
         candidate: state.candidate,
         prompts: state.prompts,
         saving: true,
-        label: state.candidate.label,
+        label: state.overriddenLabel ?? state.candidate.label,
       };
 
     case "COMMIT_SUCCESS":

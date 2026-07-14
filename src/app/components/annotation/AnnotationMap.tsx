@@ -178,6 +178,8 @@ interface Props {
   interactiveActive?: boolean;
   /** When true, SAM point clicks render red (negative) markers. */
   samPointNegative?: boolean;
+  /** When true, a SAM candidate polygon is active — forces overlay reposition. */
+  hasSamCandidate?: boolean;
 }
 
 export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
@@ -207,6 +209,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       onSamBox,
       interactiveActive: _interactiveActive,
       samPointNegative = false,
+      hasSamCandidate = false,
     },
     ref
   ) {
@@ -261,6 +264,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     const latestPointerCoordinateRef = useRef<number[] | null>(null);
     const positionOverlayFrameRef = useRef<number | null>(null);
     const imageBlobUrlRef = useRef<string | null>(null);
+    const hasSamCandidateRef = useRef(false);
 
     // Mirrors of props/callbacks read inside long-lived interaction closures
     const activeToolRef = useRef(activeTool);
@@ -298,6 +302,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     onSamBoxRef.current = onSamBox;
     const samPointNegativeRef = useRef(samPointNegative);
     samPointNegativeRef.current = samPointNegative;
+    hasSamCandidateRef.current = hasSamCandidate;
 
     // ---- Edit-session helpers ----
     const notifyDirty = useCallback((dirty: boolean) => {
@@ -443,6 +448,26 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
             }
             overlay.setPosition(anchor);
             return;
+          }
+        }
+        // Check SAM candidate source when no draft/selection is active.
+        const samSrc = samCandidateSourceRef.current;
+        if (hasSamCandidateRef.current && samSrc && map) {
+          const samFeats = samSrc.getFeatures();
+          if (samFeats.length > 0) {
+            const geom = samFeats[0].getGeometry();
+            if (geom) {
+              const [minX, minY, maxX, maxY] = geom.getExtent();
+              const cx = (minX + maxX) / 2;
+              const pTop = map.getPixelFromCoordinate([cx, minY]);
+              const pBot = map.getPixelFromCoordinate([cx, maxY]);
+              const anchor: [number, number] =
+                pTop && pBot && pTop[1] < pBot[1] ? [cx, minY] : [cx, maxY];
+              overlay.setPositioning("bottom-center");
+              overlay.setOffset([0, -10]);
+              overlay.setPosition(anchor);
+              return;
+            }
           }
         }
         overlay.setPosition(undefined);
@@ -969,7 +994,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     // ---- Position the floating overlay (draft or selection) ----
     useEffect(() => {
       positionOverlay();
-    }, [selectedAnnotationId, annotations, positionOverlay]);
+    }, [selectedAnnotationId, annotations, hasSamCandidate, positionOverlay]);
 
     // ---- Stable select / draw interactions ----
     useEffect(() => {
