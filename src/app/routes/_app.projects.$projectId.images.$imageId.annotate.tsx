@@ -998,9 +998,23 @@ export default function AnnotatePage() {
     return selectedAnnotation;
   }, [selectedAnnotation, state]);
 
+  // SAM candidate card annotation (reviewing or committing state)
+  const samCandidateAnnotation = useMemo(() => {
+    if (interactiveState.type === "reviewing" || interactiveState.type === "committing") {
+      const c = interactiveState.candidate;
+      return {
+        annotation_type: c.annotation_type,
+        label: interactiveState.type === "committing" ? interactiveState.label : samCandidateLabel,
+      };
+    }
+    return null;
+  }, [interactiveState, samCandidateLabel]);
+
   // InfoCard mode derived from state machine
   const infoCardMode: InfoCardMode =
-    state.type === "drafting" ? "draft"
+    interactiveState.type === "reviewing" || interactiveState.type === "committing"
+    ? "draft"
+    : state.type === "drafting" ? "draft"
     : state.type === "editing" ? "edit"
     : state.type === "viewing" ? "view"
     : "view"; // idle → shouldn't render, but safe fallback
@@ -1009,7 +1023,9 @@ export default function AnnotatePage() {
   const showInfoCard =
     state.type === "viewing" ||
     state.type === "editing" ||
-    state.type === "drafting";
+    state.type === "drafting" ||
+    interactiveState.type === "reviewing" ||
+    interactiveState.type === "committing";
 
   // ---- Render ----
   if (loading) {
@@ -1102,7 +1118,6 @@ export default function AnnotatePage() {
             onSend={handleSamSend}
             onUndo={handleSamUndo}
             onDiscard={handleSamDiscard}
-            onCommit={handleSamCommit}
           />
         )}
 
@@ -1141,6 +1156,7 @@ export default function AnnotatePage() {
           onSamBox={handleSamBox}
           interactiveActive={interactive.isActive}
           samPointNegative={samTool === "negative_point"}
+          hasSamCandidate={interactiveState.type === "reviewing"}
         />
 
         {/* Floating info card — portalled into the OL overlay. Mode-driven:
@@ -1148,7 +1164,22 @@ export default function AnnotatePage() {
         {overlayEl &&
           showInfoCard &&
           createPortal(
-            state.type === "drafting" ? (
+            (interactiveState.type === "reviewing" || interactiveState.type === "committing") ? (
+              <AnnotationInfoCard
+                annotation={samCandidateAnnotation}
+                labelMapping={labelMapping}
+                labelOptions={labelOptions}
+                usedLabels={usedLabels}
+                mode="draft"
+                saving={interactiveState.type === "committing"}
+                onSave={handleSamCommit}
+                onLabelChange={(lbl) => {
+                  setSamCandidateLabel(lbl);
+                  dispatchInteractive({ type: "SET_LABEL", label: lbl });
+                }}
+                onDelete={handleSamUndo}
+              />
+            ) : state.type === "drafting" ? (
               <AnnotationInfoCard
                 annotation={{
                   annotation_type: state.pendingCreate.annotation_type,

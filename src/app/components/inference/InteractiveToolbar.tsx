@@ -35,7 +35,6 @@ interface Props {
   onSend: () => void;
   onUndo: () => void;
   onDiscard: () => void;
-  onCommit: () => void;
 }
 
 export function InteractiveToolbar({
@@ -48,7 +47,6 @@ export function InteractiveToolbar({
   onSend,
   onUndo,
   onDiscard,
-  onCommit,
 }: Props) {
   const tools: Array<{
     id: SAMTool;
@@ -115,28 +113,20 @@ export function InteractiveToolbar({
       {isLoading ? (
         <Loader2 className="h-5 w-5 animate-spin text-primary mx-2" />
       ) : hasCandidate ? (
-        <>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={onUndo}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Undo last prompt"
-              >
-                <Undo2 className="h-[16px] w-[16px]" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Undo last prompt</p>
-            </TooltipContent>
-          </Tooltip>
-          <button
-            onClick={onCommit}
-            className="flex h-7 items-center gap-1 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Save
-          </button>
-        </>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onUndo}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Undo last prompt"
+            >
+              <Undo2 className="h-[16px] w-[16px]" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Undo last prompt</p>
+          </TooltipContent>
+        </Tooltip>
       ) : (
         <>
           <Tooltip>
