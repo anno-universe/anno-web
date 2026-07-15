@@ -33,7 +33,6 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { normalizeError } from "@/lib/utils/errors";
@@ -67,11 +66,6 @@ function ExportStatusBadge({ status }: { status: ExportStatus }) {
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString();
-}
-
-function progressPercent(run: ExportTaskOutput): number {
-  if (run.total_items === 0) return 0;
-  return Math.round((run.completed_items / run.total_items) * 100);
 }
 
 export default function ProjectExportsPage() {
@@ -220,38 +214,17 @@ export default function ProjectExportsPage() {
       render: (task) => <ExportStatusBadge status={task.status} />,
     },
     {
-      key: "progress",
-      header: "Progress",
-      render: (task) => {
-        if (task.status === "pending") {
-          return (
-            <span className="text-xs text-muted-foreground">—</span>
-          );
-        }
-        if (task.status === "completed") {
-          return (
-            <span className="text-xs text-muted-foreground">
-              {task.total_items} item{task.total_items !== 1 ? "s" : ""}
-            </span>
-          );
-        }
-        const pct = progressPercent(task);
-        return (
-          <div className="flex items-center gap-2 min-w-[140px]">
-            <Progress
-              value={pct}
-              className={cn(
-                "h-1.5 flex-1 [&>div]:transition-all",
-                task.status === "failed" && "[&>div]:bg-red-500",
-                task.status === "running" && "[&>div]:bg-blue-500"
-              )}
-            />
-            <span className="text-xs text-muted-foreground tabular-nums w-16 text-right">
-              {task.completed_items}/{task.total_items}
-            </span>
-          </div>
-        );
-      },
+      key: "error",
+      header: "Error",
+      render: (task) =>
+        task.error ? (
+          <span
+            className="block max-w-[200px] truncate text-xs text-red-600"
+            title={task.error}
+          >
+            {task.error}
+          </span>
+        ) : null,
     },
     {
       key: "created",

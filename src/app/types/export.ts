@@ -27,8 +27,6 @@ export interface ExportTaskOutput {
   include_images: boolean;
   status: ExportStatus;
   expires_at: string | null;
-  total_items: number;
-  completed_items: number;
   error: string;
   created_at: string;
   started_at: string | null;
