@@ -16,7 +16,7 @@ import {
   type Column,
 } from "@/components/shared/PaginatedTable";
 import { getThumbnailUrl } from "@/api/images";
-import { Upload } from "lucide-react";
+import { Upload, PenTool } from "lucide-react";
 import type { Image2DOutput } from "@/types/image";
 import type { TagOutput } from "@/types/tag";
 import type { ProjectContext } from "./_app.projects.$projectId";
@@ -97,7 +97,7 @@ function imageColumns(
     {
       key: "actions",
       header: "",
-      className: "w-24",
+      className: "w-28",
       render: (img) => (
         <Button
           type="button"
@@ -105,6 +105,7 @@ function imageColumns(
           size="xs"
           onClick={() => onAnnotate(img.id)}
         >
+          <PenTool className="size-3" />
           Annotate
         </Button>
       ),

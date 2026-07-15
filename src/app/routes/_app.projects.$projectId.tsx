@@ -147,6 +147,15 @@ export default function ProjectLayout() {
             Inference
           </NavLink>
         )}
+        {isSupervisor && (
+          <NavLink
+            to={`/projects/${id}/exports`}
+            end
+            className={tabClassName}
+          >
+            Exports
+          </NavLink>
+        )}
         <NavLink
           to={`/projects/${id}/settings`}
           end

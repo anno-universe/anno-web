@@ -36,6 +36,12 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { normalizeError } from "@/lib/utils/errors";
+import { RotateCw } from "lucide-react";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import type { ProjectContext } from "./_app.projects.$projectId";
 import type { InferenceProviderOutput } from "@/types/inferenceProvider";
 import type { RunOutput } from "@/types/inferenceRun";
@@ -299,9 +305,10 @@ export default function ProjectInferencePage() {
   if (isSupervisor) {
     columns.push({
       key: "actions",
-      header: "Actions",
+      header: "",
+      className: "w-[60px]",
       render: (run) => (
-        <div className="flex gap-1">
+        <div className="flex gap-0.5">
           {ACTIVE_RUN_STATUSES.includes(run.status) && (
             <Button
               type="button"
@@ -317,17 +324,22 @@ export default function ProjectInferencePage() {
             </Button>
           )}
           {run.status === "failed" && (
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              onClick={(e) => {
-                e.stopPropagation();
-                setRetryTarget(run);
-              }}
-            >
-              Retry
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRetryTarget(run);
+                  }}
+                >
+                  <RotateCw className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Retry</TooltipContent>
+            </Tooltip>
           )}
         </div>
       ),

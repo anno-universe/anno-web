@@ -34,6 +34,12 @@ import { InteractiveProviderSection } from "@/components/inference/InteractivePr
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { Pencil, Trash2 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import type { APIKeyOutput, APIKeyCreateInput } from "@/types/apiKey";
 import type { ProjectContext } from "./_app.projects.$projectId";
 
@@ -390,7 +396,7 @@ export default function ProjectDeveloperPage() {
                 <TableHead className="px-3">Expires</TableHead>
                 <TableHead className="px-3">Last Used</TableHead>
                 <TableHead className="px-3">Created</TableHead>
-                <TableHead className="px-3">Actions</TableHead>
+                <TableHead className="px-3 w-[70px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -446,24 +452,34 @@ export default function ProjectDeveloperPage() {
 
                   {/* Actions */}
                   <TableCell className="px-3">
-                    <div className="flex gap-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        onClick={() => startEdit(key)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        onClick={() => setDeleteTarget(key)}
-                        className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        Delete
-                      </Button>
+                    <div className="flex gap-0.5">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => startEdit(key)}
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Edit</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => setDeleteTarget(key)}
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete</TooltipContent>
+                      </Tooltip>
                     </div>
                   </TableCell>
                 </TableRow>

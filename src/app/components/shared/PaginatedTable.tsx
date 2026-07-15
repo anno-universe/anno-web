@@ -2,6 +2,7 @@ import { LoadingSpinner } from "./LoadingSpinner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -151,22 +152,24 @@ export function PaginatedTable<T>({
         <div className="flex items-center gap-1">
           <Button
             variant="outline"
-            size="sm"
+            size="icon-sm"
             onClick={() => goToPage(currentPage - 1)}
             disabled={currentPage <= 1}
+            aria-label="Previous page"
           >
-            Previous
+            <ChevronLeft className="size-4" />
           </Button>
           <span className="px-2 text-xs text-muted-foreground">
             Page {currentPage} of {totalPages || 1}
           </span>
           <Button
             variant="outline"
-            size="sm"
+            size="icon-sm"
             onClick={() => goToPage(currentPage + 1)}
             disabled={currentPage >= totalPages}
+            aria-label="Next page"
           >
-            Next
+            <ChevronRight className="size-4" />
           </Button>
         </div>
       </div>
