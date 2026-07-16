@@ -1,11 +1,12 @@
 export type ExportFormat = "coco" | "yolo";
 
-export type ExportStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+export type ExportStatus = "pending" | "running" | "completed" | "failed" | "cancelled" | "expired";
 
 export const TERMINAL_EXPORT_STATUSES: ExportStatus[] = [
   "completed",
   "failed",
   "cancelled",
+  "expired",
 ];
 
 export const ACTIVE_EXPORT_STATUSES: ExportStatus[] = [

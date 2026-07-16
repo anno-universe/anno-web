@@ -52,6 +52,7 @@ const STATUS_STYLES: Record<ExportStatus, string> = {
   completed: "bg-green-100 text-green-700 border-green-200",
   failed: "bg-red-100 text-red-700 border-red-200",
   cancelled: "bg-muted text-muted-foreground border-muted-foreground/20",
+  expired: "bg-amber-100 text-amber-700 border-amber-200",
 };
 
 function ExportStatusBadge({ status }: { status: ExportStatus }) {
