@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Outlet, useParams, NavLink, useLocation } from "react-router";
 import { getProject } from "@/api/projects";
 import { ProjectRoleBadge } from "@/components/project/ProjectRoleBadge";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { useSetBreadcrumb } from "@/lib/breadcrumb";
 import type { ProjectOutput } from "@/types/project";
@@ -50,8 +50,15 @@ export default function ProjectLayout() {
   // Only render Outlet when we have project data — children receive guaranteed project
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <LoadingSpinner />
+      <div className="mx-auto max-w-4xl px-4 py-8">
+        <div className="mb-6">
+          <Skeleton className="mb-3 h-7 w-64" />
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-20 rounded-full" />
+            <Skeleton className="h-5 w-48" />
+          </div>
+        </div>
+        <Skeleton className="h-10 w-full rounded-md" />
       </div>
     );
   }

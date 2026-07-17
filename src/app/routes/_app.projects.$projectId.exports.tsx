@@ -11,6 +11,7 @@ import {
   type Column,
 } from "@/components/shared/PaginatedTable";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { SkeletonTable } from "@/components/shared/SkeletonTable";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -312,7 +313,9 @@ export default function ProjectExportsPage() {
 
       {error && <ErrorAlert message={error} onRetry={fetchTasks} />}
 
-      {!loading && count === 0 ? (
+      {loading && count === 0 ? (
+        <SkeletonTable rows={4} />
+      ) : !loading && count === 0 ? (
         <div className="rounded-md border bg-muted/30 px-4 py-12 text-center text-sm text-muted-foreground">
           No export tasks yet. Create one to export annotations in COCO or YOLO
           format.
@@ -323,7 +326,7 @@ export default function ProjectExportsPage() {
           rows={tasks}
           pagination={{ count, limit, offset }}
           onPageChange={handlePageChange}
-          isLoading={loading}
+          isLoading={loading && count > 0}
           getRowKey={(task) => task.id}
         />
       )}

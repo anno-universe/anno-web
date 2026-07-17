@@ -8,7 +8,7 @@ import {
 } from "@/api/projects";
 import { searchUsers } from "@/api/users";
 import { PaginatedTable } from "@/components/shared/PaginatedTable";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { SkeletonTable } from "@/components/shared/SkeletonTable";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -476,9 +476,7 @@ export default function ProjectMembersPage() {
 
       {/* Initial loading */}
       {loading && members.length === 0 && !error && (
-        <div className="flex items-center justify-center py-12">
-          <LoadingSpinner />
-        </div>
+        <SkeletonTable rows={4} />
       )}
 
       {/* Member table */}

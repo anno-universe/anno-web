@@ -12,6 +12,7 @@ import {
   type Column,
 } from "@/components/shared/PaginatedTable";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { SkeletonTable } from "@/components/shared/SkeletonTable";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -373,7 +374,9 @@ export default function ProjectInferencePage() {
       {error && <ErrorAlert message={error} onRetry={fetchRuns} />}
 
       {/* Job table */}
-      {!loading && count === 0 ? (
+      {loading && count === 0 ? (
+        <SkeletonTable rows={4} />
+      ) : !loading && count === 0 ? (
         <div className="rounded-md border bg-muted/30 px-4 py-12 text-center text-sm text-muted-foreground">
           No inference runs yet. Start one to auto-annotate all images in this
           project.
@@ -384,7 +387,7 @@ export default function ProjectInferencePage() {
           rows={runs}
           pagination={{ count, limit, offset }}
           onPageChange={handlePageChange}
-          isLoading={loading}
+          isLoading={loading && count > 0}
           getRowKey={(run) => run.id}
         />
       )}

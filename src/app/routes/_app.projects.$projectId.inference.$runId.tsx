@@ -6,7 +6,7 @@ import {
   retryInferenceRun,
 } from "@/api/inferenceRuns";
 import { getInferenceProviders } from "@/api/inferenceProviders";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { RunStatusBadge } from "@/components/inference/RunStatusBadge";
@@ -171,8 +171,15 @@ export default function ProjectInferenceRunDetailPage() {
   // ---- Render ----
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <LoadingSpinner />
+      <div className="mx-auto max-w-3xl px-4 py-8">
+        <Skeleton className="mb-4 h-7 w-48" />
+        <Skeleton className="mb-3 h-4 w-full" />
+        <Skeleton className="mb-3 h-4 w-11/12" />
+        <Skeleton className="mb-3 h-4 w-3/4" />
+        <Skeleton className="mb-6 h-6 w-full rounded-md" />
+        <Skeleton className="mb-3 h-4 w-full" />
+        <Skeleton className="mb-3 h-4 w-2/3" />
+        <Skeleton className="h-4 w-1/2" />
       </div>
     );
   }

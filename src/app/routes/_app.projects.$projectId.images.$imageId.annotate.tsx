@@ -29,7 +29,7 @@ import { AnnotationSidePanel } from "@/components/annotation/AnnotationSidePanel
 import { AnnotationInfoCard } from "@/components/annotation/AnnotationInfoCard";
 import { ContextMenu } from "@/components/annotation/ContextMenu";
 import { StatusBar } from "@/components/annotation/StatusBar";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { AnnotationTopToolBar } from "@/components/annotation/AnnotationTopToolBar";
@@ -1030,8 +1030,16 @@ export default function AnnotatePage() {
   // ---- Render ----
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <LoadingSpinner />
+      <div className="flex h-[calc(100vh-5rem)] flex-col">
+        <Skeleton className="h-12 w-full rounded-none" />
+        <div className="flex flex-1">
+          <Skeleton className="flex-1 rounded-none" />
+          <div className="flex w-80 shrink-0 flex-col gap-4 border-l p-4">
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-48 w-full rounded-md" />
+            <Skeleton className="h-36 w-full rounded-md" />
+          </div>
+        </div>
       </div>
     );
   }
