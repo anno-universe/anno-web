@@ -3,8 +3,9 @@ import { Link } from "react-router";
 import { getProjects } from "@/api/projects";
 import { CreateProjectDialog } from "@/components/project/CreateProjectDialog";
 import { ProjectRoleBadge } from "@/components/project/ProjectRoleBadge";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
+import { SkeletonTable } from "@/components/shared/SkeletonTable";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Empty,
   EmptyHeader,
@@ -95,8 +96,12 @@ export default function ProjectsPage() {
 
   if (loading && projects.length === 0) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <LoadingSpinner />
+      <div className="mx-auto max-w-4xl px-4 py-8">
+        <div className="mb-6 flex items-center justify-between">
+          <Skeleton className="h-7 w-24" />
+          <Skeleton className="h-9 w-32 rounded-md" />
+        </div>
+        <SkeletonTable rows={6} />
       </div>
     );
   }

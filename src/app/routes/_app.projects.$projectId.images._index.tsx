@@ -3,7 +3,6 @@ import { Link, useParams, useOutletContext, useNavigate, useSearchParams } from 
 import { getImages } from "@/api/images";
 import { getProjectTags } from "@/api/tags";
 import { AuthenticatedImage } from "@/components/image/AuthenticatedImage";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import {
   Empty,
@@ -11,6 +10,8 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SkeletonTableWithThumbs } from "@/components/shared/SkeletonTable";
 import {
   PaginatedTable,
   type Column,
@@ -209,8 +210,12 @@ export default function ImagesPage() {
 
   if (loading && images.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <LoadingSpinner />
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-9 w-28 rounded-md" />
+        </div>
+        <SkeletonTableWithThumbs rows={6} />
       </div>
     );
   }

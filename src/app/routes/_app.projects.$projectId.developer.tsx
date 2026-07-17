@@ -7,6 +7,7 @@ import {
   deleteApiKey,
 } from "@/api/apiKeys";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { SkeletonTable } from "@/components/shared/SkeletonTable";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -377,9 +378,7 @@ export default function ProjectDeveloperPage() {
 
       {/* Keys table */}
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <LoadingSpinner />
-        </div>
+        <SkeletonTable rows={3} />
       ) : keys.length === 0 ? (
         <div className="rounded-md border bg-muted/30 px-4 py-12 text-center text-sm text-muted-foreground">
           No API keys yet. Create one to allow external services to access this
