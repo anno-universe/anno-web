@@ -13,6 +13,7 @@ import type {
 } from "@/types/annotation";
 import { isBoxData, isPointsData } from "@/types/annotation";
 import { flipGeometryY } from "@/lib/annotation/imageProjection";
+import { normalizeBoxTopEdge } from "@/lib/annotation/mapInteractions";
 
 // ---- Backend → OpenLayers ----
 
@@ -129,23 +130,44 @@ export function boxDataToGeometry(data: {
 /**
  * Convert a (possibly rotated) box polygon back to {x, y, width, height, rotation}.
  * Extracts the axis-aligned bounding-box top-left and size, plus the rotation
- * angle in degrees computed from the first edge.
+ * angle in degrees, canonicalised into (-90, 90] via the rectangle's 180°
+ * symmetry (so axis-aligned boxes always read back as rotation 0).
  */
 export function polygonFeatureToBox(geometry: Polygon): Box2DDataInput {
   const ring = geometry.getCoordinates()[0];
-  // OpenLayers rings are closed (last == first); use the first 4 corners.
-  const corners = ring.slice(0, 4) as [number, number][];
+  // OpenLayers rings are closed (last == first); take the 4 unique corners, then
+  // normalise the winding so edge corners[0]→corners[1] is a genuine box edge.
+  //
+  // WHY: createBox() and fromExtent() both wind the ring starting on a VERTICAL
+  // edge ([minX,minY]→[minX,maxY]). Reading rotation off that edge via
+  // atan2(dy, 0) yields ±90° for a perfectly axis-aligned box, which then swaps
+  // width/height and pushes x/y into a rotated frame (often negative) — the box
+  // still renders correctly (boxDataToGeometry re-applies the rotation) but the
+  // persisted {x,y,width,height,rotation} is semantically wrong. Normalising to
+  // the top edge makes that first edge horizontal for axis-aligned boxes, so
+  // rotation comes out 0 and x/y/width/height are the true AABB.
+  const corners = normalizeBoxTopEdge(ring.slice(0, 4) as [number, number][]);
 
   // Center of the 4 corners
   const cx = corners.reduce((s, c) => s + c[0], 0) / 4;
   const cy = corners.reduce((s, c) => s + c[1], 0) / 4;
 
-  // Rotation from the first edge
+  // Rotation from the first (now normalised) edge, in (-180, 180].
   const dx = corners[1][0] - corners[0][0];
   const dy = corners[1][1] - corners[0][1];
-  const rotation = roundDeg((Math.atan2(dy, dx) * 180) / Math.PI);
+  let deg = (Math.atan2(dy, dx) * 180) / Math.PI;
 
-  // Unrotate corners to get axis-aligned dimensions
+  // A rectangle is invariant under a 180° turn (identical footprint AND
+  // width/height), so fold the angle into (-90, 90]. This canonicalises the
+  // winding-dependent edge choice: 180/−180 → 0, and near-180 values such as
+  // −179.53 → 0.47 (the tilt the box actually has), instead of persisting a
+  // spurious ~180° rotation. Folding BEFORE the unrotate below keeps x/y/width/
+  // height consistent with the stored angle.
+  if (deg > 90) deg -= 180;
+  else if (deg <= -90) deg += 180;
+  const rotation = roundDeg(deg);
+
+  // Unrotate corners to get axis-aligned dimensions (using the canonical angle)
   const rad = (-rotation * Math.PI) / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);

@@ -831,6 +831,12 @@ export default function AnnotatePage() {
     }
   }
 
+  const metaInfo = upgradeMetaInfoConfig(
+    project?.meta_info as Record<string, unknown>
+  );
+  const keypointEnabled = metaInfo.keypoint_enabled === true;
+  const boxRotationEnabled = metaInfo.box_rotation_enabled === true;
+
   // ---- Keyboard shortcuts ----
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -916,6 +922,7 @@ export default function AnnotatePage() {
     selectedId,
     activeTool,
     keypointDraftCount,
+    keypointEnabled,
     interactive.isActive,
     selectAnnotation,
     changeTool,
@@ -924,6 +931,9 @@ export default function AnnotatePage() {
     handleRevertEdit,
     handleDiscardDraft,
     requestDelete,
+    handleSamSend,
+    handleSamCommit,
+    handleSamDiscard,
   ]);
 
   // ---- Derived values ----
@@ -940,12 +950,6 @@ export default function AnnotatePage() {
     }
     return [...set].sort((a, b) => a - b);
   }, [annotations]);
-
-  const metaInfo = upgradeMetaInfoConfig(
-    project?.meta_info as Record<string, unknown>
-  );
-  const keypointEnabled = metaInfo.keypoint_enabled === true;
-  const boxRotationEnabled = metaInfo.box_rotation_enabled === true;
 
   // Selected annotation for the info card
   const selectedAnnotation = useMemo(() => {
