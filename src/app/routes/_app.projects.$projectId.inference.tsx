@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useOutletContext, Link } from "react-router";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   getInferenceRuns,
   startBatchInference,
@@ -37,6 +38,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { normalizeError } from "@/lib/utils/errors";
+import { queryKeys } from "@/lib/queryKeys";
 import { RotateCw } from "lucide-react";
 import {
   Tooltip,
@@ -44,7 +46,6 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip";
 import type { ProjectContext } from "./_app.projects.$projectId";
-import type { InferenceProviderOutput } from "@/types/inferenceProvider";
 import type { RunOutput } from "@/types/inferenceRun";
 import { ACTIVE_RUN_STATUSES } from "@/types/inferenceRun";
 
@@ -65,26 +66,8 @@ export default function ProjectInferencePage() {
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
-  if (!isSupervisor) {
-    return (
-      <div className="rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-        Your role is {project.my_role ?? "none"}. Inference run management is
-        only available to supervisors.
-      </div>
-    );
-  }
-
-  // Run list state (paginated from server)
-  const [runs, setRuns] = useState<RunOutput[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [count, setCount] = useState(0);
   const [limit, setLimit] = useState(20);
   const [offset, setOffset] = useState(0);
-
-  // Providers (for name lookups + start form)
-  const [providers, setProviders] = useState<InferenceProviderOutput[]>([]);
-  const [providersLoading, setProvidersLoading] = useState(true);
 
   // Start new job modal
   const [showStartModal, setShowStartModal] = useState(false);
@@ -101,8 +84,30 @@ export default function ProjectInferencePage() {
   const [retryTarget, setRetryTarget] = useState<RunOutput | null>(null);
   const [retrying, setRetrying] = useState(false);
 
-  // Polling
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const runsQuery = useQuery({
+    queryKey: queryKeys.inference.runs(pid, limit, offset),
+    queryFn: ({ signal }) =>
+      getInferenceRuns(pid, { limit, offset }, { signal }),
+    enabled: isSupervisor,
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) =>
+      query.state.data?.items.some((run) =>
+        ACTIVE_RUN_STATUSES.includes(run.status)
+      )
+        ? 5000
+        : false,
+  });
+
+  const providersQuery = useQuery({
+    queryKey: queryKeys.inference.providers(pid),
+    queryFn: ({ signal }) =>
+      getInferenceProviders(pid, { limit: 100 }, { signal }),
+    enabled: isSupervisor,
+  });
+
+  const runs = runsQuery.data?.items ?? [];
+  const count = runsQuery.data?.count ?? 0;
+  const providers = providersQuery.data?.items ?? [];
 
   // Provider lookup map
   const providerMap = useMemo(
@@ -110,68 +115,19 @@ export default function ProjectInferencePage() {
     [providers]
   );
 
-  // ---- Data fetching ----
-  const fetchRuns = useCallback(async () => {
-    try {
-      const resp = await getInferenceRuns(pid, { limit, offset });
-      setRuns(resp.items);
-      setCount(resp.count);
-      setError("");
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load runs"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [pid, limit, offset]);
-
-  const fetchProviders = useCallback(async () => {
-    try {
-      const resp = await getInferenceProviders(pid, { limit: 100 });
-      setProviders(resp.items);
-      const active = resp.items.filter((p) => p.is_active);
-      if (active.length > 0 && !selectedProviderId) {
-        setSelectedProviderId(active[0].id);
-      }
-    } catch {
-      // non-blocking
-    } finally {
-      setProvidersLoading(false);
-    }
-  }, [pid, selectedProviderId]);
-
-  useEffect(() => {
-    fetchRuns();
-    fetchProviders();
-  }, [fetchRuns, fetchProviders]);
-
-  // ---- Polling (same page params) ----
-  useEffect(() => {
-    const hasActive = runs.some((r) =>
-      ACTIVE_RUN_STATUSES.includes(r.status)
+  if (!isSupervisor) {
+    return (
+      <div className="rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+        Your role is {project.my_role ?? "none"}. Inference run management is
+        only available to supervisors.
+      </div>
     );
-
-    if (hasActive && !pollRef.current) {
-      pollRef.current = setInterval(fetchRuns, 5000);
-    } else if (!hasActive && pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [runs, fetchRuns]);
+  }
 
   // ---- Page change ----
   function handlePageChange(newOffset: number, newLimit: number) {
     setOffset(newOffset);
     setLimit(newLimit);
-    setLoading(true);
   }
 
   // ---- Start batch job ----
@@ -189,7 +145,7 @@ export default function ProjectInferencePage() {
       const run = await startBatchInference(pid, selectedProviderId);
       setShowStartModal(false);
       toast.success(`Inference run #${run.id} started for ${run.total_items} images.`);
-      await fetchRuns();
+      await runsQuery.refetch();
     } catch (err: unknown) {
       toast.error(normalizeError(err).message);
     } finally {
@@ -204,7 +160,7 @@ export default function ProjectInferencePage() {
     try {
       await cancelInferenceRun(pid, cancelTarget.id);
       setCancelTarget(null);
-      await fetchRuns();
+      await runsQuery.refetch();
       toast.success("Cancellation requested.");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to cancel run");
@@ -220,7 +176,7 @@ export default function ProjectInferencePage() {
     try {
       await retryInferenceRun(pid, retryTarget.id);
       setRetryTarget(null);
-      await fetchRuns();
+      await runsQuery.refetch();
       toast.success("Run retry queued.");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to retry run");
@@ -371,12 +327,17 @@ export default function ProjectInferencePage() {
       </div>
 
       {/* Error */}
-      {error && <ErrorAlert message={error} onRetry={fetchRuns} />}
+      {runsQuery.isError && (
+        <ErrorAlert
+          message={runsQuery.error.message}
+          onRetry={() => void runsQuery.refetch()}
+        />
+      )}
 
       {/* Job table */}
-      {loading && count === 0 ? (
+      {runsQuery.isPending ? (
         <SkeletonTable rows={4} />
-      ) : !loading && count === 0 ? (
+      ) : !runsQuery.isFetching && count === 0 ? (
         <div className="rounded-md border bg-muted/30 px-4 py-12 text-center text-sm text-muted-foreground">
           No inference runs yet. Start one to auto-annotate all images in this
           project.
@@ -387,7 +348,7 @@ export default function ProjectInferencePage() {
           rows={runs}
           pagination={{ count, limit, offset }}
           onPageChange={handlePageChange}
-          isLoading={loading && count > 0}
+          isLoading={runsQuery.isFetching && count > 0}
           getRowKey={(run) => run.id}
         />
       )}
@@ -410,7 +371,7 @@ export default function ProjectInferencePage() {
             </p>
             <Field>
               <FieldLabel htmlFor="inferProvider">Provider</FieldLabel>
-              {providersLoading ? (
+              {providersQuery.isPending ? (
                 <LoadingSpinner />
               ) : (
                 <Select

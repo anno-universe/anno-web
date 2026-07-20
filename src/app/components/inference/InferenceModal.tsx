@@ -98,7 +98,9 @@ export function InferenceModal({
 
   // Minimum-visible-time ref (so the spinner shows at least 1 second)
   const startedAtRef = useRef<number>(0);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollAbortRef = useRef<AbortController | null>(null);
 
   // ---- Fetch providers on open ----
   useEffect(() => {
@@ -140,7 +142,9 @@ export function InferenceModal({
   // ---- Cleanup polling on unmount ----
   useEffect(() => {
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      if (pollRef.current) clearTimeout(pollRef.current);
+      if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
+      pollAbortRef.current?.abort();
     };
   }, []);
 
@@ -157,19 +161,24 @@ export function InferenceModal({
       setPhase("running");
       setStarting(false);
       startedAtRef.current = Date.now();
+      const controller = new AbortController();
+      pollAbortRef.current = controller;
 
-      // Poll for run completion
-      pollRef.current = setInterval(async () => {
+      const finishAfterMinimum = (callback: () => void) => {
+        const elapsed = Date.now() - startedAtRef.current;
+        const minRemaining = Math.max(0, 1000 - elapsed);
+        completionTimerRef.current = setTimeout(callback, minRemaining);
+      };
+
+      const poll = async () => {
         try {
-          const r = await getInferenceRunForImage(projectId, imageId, run.id);
+          const r = await getInferenceRunForImage(projectId, imageId, run.id, {
+            signal: controller.signal,
+          });
+          if (controller.signal.aborted) return;
           if (TERMINAL_RUN_STATUSES.includes(r.status)) {
-            clearInterval(pollRef.current!);
             pollRef.current = null;
-
-            // Ensure at least 1 second of spinner visibility
-            const elapsed = Date.now() - startedAtRef.current;
-            const minRemaining = Math.max(0, 1000 - elapsed);
-            setTimeout(() => {
+            finishAfterMinimum(() => {
               if (r.status === "completed") {
                 setAnnotationsCreated(r.annotations_created);
                 setPhase("success");
@@ -178,19 +187,21 @@ export function InferenceModal({
                 setError(r.error || `Inference ${r.status}.`);
                 setPhase("error");
               }
-            }, minRemaining);
+            });
+            return;
           }
+          pollRef.current = setTimeout(poll, 2000);
         } catch {
-          clearInterval(pollRef.current!);
+          if (controller.signal.aborted) return;
           pollRef.current = null;
-          const elapsed = Date.now() - startedAtRef.current;
-          const minRemaining = Math.max(0, 1000 - elapsed);
-          setTimeout(() => {
+          finishAfterMinimum(() => {
             setError("Lost connection while checking inference status.");
             setPhase("error");
-          }, minRemaining);
+          });
         }
-      }, 2000);
+      };
+
+      pollRef.current = setTimeout(poll, 2000);
     } catch (err: unknown) {
       setStarting(false);
       setError(normalizeError(err).message);
@@ -201,9 +212,15 @@ export function InferenceModal({
   // ---- Close ----
   function handleClose() {
     if (pollRef.current) {
-      clearInterval(pollRef.current);
+      clearTimeout(pollRef.current);
       pollRef.current = null;
     }
+    if (completionTimerRef.current) {
+      clearTimeout(completionTimerRef.current);
+      completionTimerRef.current = null;
+    }
+    pollAbortRef.current?.abort();
+    pollAbortRef.current = null;
     onClose();
   }
 

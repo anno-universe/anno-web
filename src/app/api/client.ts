@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { type AxiosRequestConfig } from "axios";
 import { tokenStorage } from "@/lib/auth/tokenStorage";
 import type { TokenRefreshOutput } from "@/types/auth";
 
@@ -35,17 +35,48 @@ export const api = axios.create({
   paramsSerializer,
 });
 
-// ---- Refresh queue ----
-let isRefreshing = false;
-let refreshSubscribers: Array<(token: string) => void> = [];
-
-function onRefreshed(token: string) {
-  refreshSubscribers.forEach((cb) => cb(token));
-  refreshSubscribers = [];
+interface RetryableRequestConfig extends AxiosRequestConfig {
+  _retry?: boolean;
 }
 
-function addRefreshSubscriber(cb: (token: string) => void) {
-  refreshSubscribers.push(cb);
+let refreshPromise: Promise<string> | null = null;
+let isRedirectingToLogin = false;
+
+function redirectToLogin() {
+  if (isRedirectingToLogin || window.location.pathname === "/login") return;
+  isRedirectingToLogin = true;
+  window.location.href = "/login";
+}
+
+function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const refreshToken = tokenStorage.getRefreshToken();
+      if (!refreshToken) {
+        throw new Error("No refresh token available");
+      }
+
+      const { data } = await axios.post<TokenRefreshOutput>(
+        `${BASE_URL}/api/token/refresh`,
+        { refresh: refreshToken }
+      );
+
+      if (!data.access) {
+        throw new Error("Refresh token expired");
+      }
+
+      tokenStorage.setTokens(
+        data.access,
+        data.refresh,
+        tokenStorage.getUsername() || ""
+      );
+      return data.access;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
 }
 
 // ---- Request interceptor: attach access token ----
@@ -61,64 +92,34 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config as RetryableRequestConfig | undefined;
 
     // Don't retry if it's already a refresh request
     if (originalRequest?.url?.includes("/api/token/refresh")) {
       tokenStorage.clearTokens();
-      window.location.href = "/login";
+      redirectToLogin();
       return Promise.reject(error);
     }
 
     // Only handle 401
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    if (
+      error.response?.status !== 401 ||
+      !originalRequest ||
+      originalRequest._retry
+    ) {
       return Promise.reject(error);
     }
 
-    // Queue concurrent requests while refreshing
-    if (isRefreshing) {
-      return new Promise((resolve) => {
-        addRefreshSubscriber((token: string) => {
-          originalRequest.headers["Authorization"] = `Bearer ${token}`;
-          resolve(api(originalRequest));
-        });
-      });
-    }
-
     originalRequest._retry = true;
-    isRefreshing = true;
 
     try {
-      const refreshToken = tokenStorage.getRefreshToken();
-      if (!refreshToken) {
-        throw new Error("No refresh token available");
-      }
-
-      const { data } = await axios.post<TokenRefreshOutput>(
-        `${BASE_URL}/api/token/refresh`,
-        { refresh: refreshToken }
-      );
-
-      // access can be null when refresh is also expired
-      if (!data.access) {
-        throw new Error("Refresh token expired");
-      }
-
-      const username =
-        tokenStorage.getUsername() || "";
-
-      tokenStorage.setTokens(data.access, data.refresh, username);
-
-      isRefreshing = false;
-      onRefreshed(data.access);
-
-      originalRequest.headers["Authorization"] = `Bearer ${data.access}`;
+      const accessToken = await refreshAccessToken();
+      originalRequest.headers = originalRequest.headers ?? {};
+      originalRequest.headers["Authorization"] = `Bearer ${accessToken}`;
       return api(originalRequest);
     } catch (refreshError) {
-      isRefreshing = false;
-      refreshSubscribers = [];
       tokenStorage.clearTokens();
-      window.location.href = "/login";
+      redirectToLogin();
       return Promise.reject(refreshError);
     }
   }
@@ -126,47 +127,61 @@ api.interceptors.response.use(
 
 // ---- Typed helpers ----
 
+export type ApiRequestOptions = Pick<AxiosRequestConfig, "signal">;
+
 export async function apiGet<T>(
   url: string,
-  params?: Record<string, unknown>
+  params?: Record<string, unknown>,
+  options?: ApiRequestOptions
 ): Promise<T> {
-  const { data } = await api.get<T>(url, { params });
+  const { data } = await api.get<T>(url, { params, ...options });
   return data;
 }
 
 export async function apiPost<T>(
   url: string,
-  body?: unknown
+  body?: unknown,
+  options?: ApiRequestOptions
 ): Promise<T> {
-  const { data } = await api.post<T>(url, body);
+  const { data } = await api.post<T>(url, body, options);
   return data;
 }
 
 export async function apiPatch<T>(
   url: string,
-  body?: unknown
+  body?: unknown,
+  options?: ApiRequestOptions
 ): Promise<T> {
-  const { data } = await api.patch<T>(url, body);
+  const { data } = await api.patch<T>(url, body, options);
   return data;
 }
 
-export async function apiDelete(url: string): Promise<void> {
-  await api.delete(url);
+export async function apiDelete(
+  url: string,
+  options?: ApiRequestOptions
+): Promise<void> {
+  await api.delete(url, options);
 }
 
-export async function apiGetBlob(url: string): Promise<Blob> {
+export async function apiGetBlob(
+  url: string,
+  options?: ApiRequestOptions
+): Promise<Blob> {
   const { data } = await api.get<Blob>(url, {
     responseType: "blob",
+    ...options,
   });
   return data;
 }
 
 export async function apiPostForm<T>(
   url: string,
-  formData: FormData
+  formData: FormData,
+  options?: ApiRequestOptions
 ): Promise<T> {
   const { data } = await api.post<T>(url, formData, {
     headers: { "Content-Type": "multipart/form-data" },
+    ...options,
   });
   return data;
 }

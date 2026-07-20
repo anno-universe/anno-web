@@ -74,6 +74,7 @@ export const TagManager = forwardRef<TagManagerHandle, Props>(
 
     // Sync when parent reloads tags (after save)
     useEffect(() => {
+      deletedIds.current.clear();
       setRows(tagsToRows(tags));
     }, [tags]);
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, type ImgHTMLAttributes } from "react";
+import { useEffect, useState, type ImgHTMLAttributes } from "react";
 import { apiGetBlob } from "@/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -9,28 +9,28 @@ interface Props extends ImgHTMLAttributes<HTMLImageElement> {
 export function AuthenticatedImage({ src, alt, ...imgProps }: Props) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
-  const mountedRef = useRef(true);
-
   useEffect(() => {
-    mountedRef.current = true;
+    const controller = new AbortController();
+    let disposed = false;
+    let objectUrl: string | null = null;
+
     setError(false);
     setObjectUrl(null);
 
-    let url: string | null = null;
-
-    apiGetBlob(src)
+    apiGetBlob(src, { signal: controller.signal })
       .then((blob) => {
-        if (!mountedRef.current) return;
-        url = URL.createObjectURL(blob);
-        setObjectUrl(url);
+        if (disposed) return;
+        objectUrl = URL.createObjectURL(blob);
+        setObjectUrl(objectUrl);
       })
       .catch(() => {
-        if (mountedRef.current) setError(true);
+        if (!disposed && !controller.signal.aborted) setError(true);
       });
 
     return () => {
-      mountedRef.current = false;
-      if (url) URL.revokeObjectURL(url);
+      disposed = true;
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [src]);
 

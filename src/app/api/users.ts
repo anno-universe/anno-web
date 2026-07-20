@@ -1,4 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "./client";
+import type { ApiRequestOptions } from "./client";
 import type { PaginatedResponse } from "@/types/api";
 import type { UserProfile, RegisterInput, ProfileUpdateInput, UserSearchResult } from "@/types/user";
 
@@ -15,7 +16,12 @@ export function patchProfile(input: ProfileUpdateInput): Promise<UserProfile> {
 }
 
 export function searchUsers(
-  params?: { q: string; limit?: number; offset?: number }
+  params?: { q: string; limit?: number; offset?: number },
+  options?: ApiRequestOptions
 ): Promise<PaginatedResponse<UserSearchResult>> {
-  return apiGet<PaginatedResponse<UserSearchResult>>("/api/users/search", params);
+  return apiGet<PaginatedResponse<UserSearchResult>>(
+    "/api/users/search",
+    params,
+    options
+  );
 }

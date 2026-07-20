@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from "./client";
+import type { ApiRequestOptions } from "./client";
 import type { PaginatedResponse, PaginationParams } from "@/types/api";
 import type {
   Annotation2DOutput,
@@ -8,11 +9,13 @@ import type {
 export function getAnnotations(
   projectId: number,
   imageId: number,
-  params?: PaginationParams
+  params?: PaginationParams,
+  options?: ApiRequestOptions
 ): Promise<PaginatedResponse<Annotation2DOutput>> {
   return apiGet<PaginatedResponse<Annotation2DOutput>>(
     `/api/projects/${projectId}/images/${imageId}/annotations/`,
-    params
+    params,
+    options
   );
 }
 

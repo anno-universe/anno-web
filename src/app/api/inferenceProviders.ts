@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/api/client";
+import type { ApiRequestOptions } from "@/api/client";
 import type { PaginatedResponse, PaginationParams } from "@/types/api";
 import type {
   InferenceProviderOutput,
@@ -8,11 +9,13 @@ import type {
 
 export function getInferenceProviders(
   projectId: number,
-  params?: PaginationParams
+  params?: PaginationParams,
+  options?: ApiRequestOptions
 ): Promise<PaginatedResponse<InferenceProviderOutput>> {
   return apiGet<PaginatedResponse<InferenceProviderOutput>>(
     `/api/projects/${projectId}/inference-providers/`,
-    params as Record<string, unknown>
+    params as Record<string, unknown>,
+    options
   );
 }
 

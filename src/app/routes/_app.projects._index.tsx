@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getProjects } from "@/api/projects";
 import { CreateProjectDialog } from "@/components/project/CreateProjectDialog";
 import { ProjectRoleBadge } from "@/components/project/ProjectRoleBadge";
@@ -20,6 +21,7 @@ import {
   type PaginationState,
 } from "@/components/shared/PaginatedTable";
 import { formatRelativeTime } from "@/lib/utils/date";
+import { queryKeys } from "@/lib/queryKeys";
 import type { ProjectOutput } from "@/types/project";
 
 const DEFAULT_LIMIT = 20;
@@ -62,39 +64,29 @@ const COLUMNS: Column<ProjectOutput>[] = [
 ];
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<ProjectOutput[]>([]);
-  const [pagination, setPagination] = useState<PaginationState>({
-    count: 0,
-    limit: DEFAULT_LIMIT,
-    offset: 0,
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  const [offset, setOffset] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
 
-  async function fetchProjects(limit: number, offset: number) {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await getProjects({ limit, offset });
-      setProjects(data.items);
-      setPagination({ count: data.count, limit: data.limit, offset: data.offset });
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load projects");
-    } finally {
-      setLoading(false);
-    }
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects.list(limit, offset),
+    queryFn: ({ signal }) => getProjects({ limit, offset }, { signal }),
+    placeholderData: keepPreviousData,
+  });
+
+  const projects = projectsQuery.data?.items ?? [];
+  const pagination: PaginationState = {
+    count: projectsQuery.data?.count ?? 0,
+    limit: projectsQuery.data?.limit ?? limit,
+    offset: projectsQuery.data?.offset ?? offset,
+  };
+
+  function handlePageChange(nextOffset: number, nextLimit: number) {
+    setOffset(nextOffset);
+    setLimit(nextLimit);
   }
 
-  useEffect(() => {
-    fetchProjects(DEFAULT_LIMIT, 0);
-  }, []);
-
-  function handlePageChange(offset: number, limit: number) {
-    fetchProjects(limit, offset);
-  }
-
-  if (loading && projects.length === 0) {
+  if (projectsQuery.isPending) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-8">
         <div className="mb-6 flex items-center justify-between">
@@ -106,18 +98,18 @@ export default function ProjectsPage() {
     );
   }
 
-  if (error && projects.length === 0) {
+  if (projectsQuery.isError && projects.length === 0) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12">
         <ErrorAlert
-          message={error}
-          onRetry={() => fetchProjects(pagination.limit, pagination.offset)}
+          message={projectsQuery.error.message}
+          onRetry={() => projectsQuery.refetch()}
         />
       </div>
     );
   }
 
-  if (!loading && pagination.count === 0) {
+  if (!projectsQuery.isFetching && pagination.count === 0) {
     return (
       <div className="py-20">
         <Empty>
@@ -149,7 +141,7 @@ export default function ProjectsPage() {
         rows={projects}
         pagination={pagination}
         onPageChange={handlePageChange}
-        isLoading={loading}
+        isLoading={projectsQuery.isFetching}
         getRowKey={(p) => p.id}
       />
 

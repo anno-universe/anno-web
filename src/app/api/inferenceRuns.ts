@@ -1,4 +1,5 @@
 import { apiGet, apiPost } from "@/api/client";
+import type { ApiRequestOptions } from "@/api/client";
 import type { PaginatedResponse, PaginationParams } from "@/types/api";
 import type {
   RunOutput,
@@ -20,21 +21,26 @@ export function startBatchInference(
 /** List auto-annotation runs for a project (most recent first). */
 export function getInferenceRuns(
   projectId: number,
-  params?: PaginationParams
+  params?: PaginationParams,
+  options?: ApiRequestOptions
 ): Promise<PaginatedResponse<RunOutput>> {
   return apiGet<PaginatedResponse<RunOutput>>(
     `/api/projects/${projectId}/auto-annotate/runs`,
-    params as Record<string, unknown>
+    params as Record<string, unknown>,
+    options
   );
 }
 
 /** Get a single run with per-image task statuses. */
 export function getInferenceRun(
   projectId: number,
-  runId: number
+  runId: number,
+  options?: ApiRequestOptions
 ): Promise<RunDetailOutput> {
   return apiGet<RunDetailOutput>(
-    `/api/projects/${projectId}/auto-annotate/runs/${runId}`
+    `/api/projects/${projectId}/auto-annotate/runs/${runId}`,
+    undefined,
+    options
   );
 }
 
@@ -74,10 +80,13 @@ export function startSingleImageInference(
 export function getInferenceRunForImage(
   projectId: number,
   imageId: number,
-  runId: number
+  runId: number,
+  options?: ApiRequestOptions
 ): Promise<RunDetailOutput> {
   return apiGet<RunDetailOutput>(
-    `/api/projects/${projectId}/images/${imageId}/auto-annotate/runs/${runId}`
+    `/api/projects/${projectId}/images/${imageId}/auto-annotate/runs/${runId}`,
+    undefined,
+    options
   );
 }
 

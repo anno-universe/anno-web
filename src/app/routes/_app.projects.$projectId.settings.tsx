@@ -34,7 +34,6 @@ import {
   FieldDescription,
 } from "@/components/ui/field";
 import {
-  needsProjectConfigUpgrade,
   upgradeLabelMappingConfig,
   upgradeMetaInfoConfig,
   type LabelMappingConfigV2,
@@ -86,26 +85,6 @@ export default function ProjectSettingsPage() {
     loadTags();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-upgrade legacy config on mount
-  useEffect(() => {
-    if (
-      needsProjectConfigUpgrade(project.meta_info as Record<string, unknown>) ||
-      needsProjectConfigUpgrade(project.label_mapping as Record<string, unknown>)
-    ) {
-      const upgradedPatch = {
-        meta_info: upgradeMetaInfoConfig(
-          project.meta_info as Record<string, unknown>
-        ),
-        label_mapping: upgradeLabelMappingConfig(
-          project.label_mapping as Record<string, unknown>
-        ),
-      };
-      updateProject(id, upgradedPatch).then(() => {
-        refreshProject();
-      });
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
   async function handleSave(e: FormEvent) {
@@ -143,22 +122,31 @@ export default function ProjectSettingsPage() {
 
     setSaving(true);
     try {
-      // Save project fields (if changed)
+      const operations: Promise<unknown>[] = [];
       if (projectChanged) {
-        await updateProject(id, patch);
-        refreshProject();
+        operations.push(updateProject(id, patch));
       }
 
-      // Save tags (creates / updates / deletes)
       if (tagOpsPending && tagChanges) {
-        await Promise.all([
+        operations.push(
           ...tagChanges.creates.map((c) => createTag(id, c)),
           ...tagChanges.updates.map((u) => updateTag(id, u.id, u.patch)),
-          ...tagChanges.deletes.map((d) => deleteTag(id, d)),
-        ]);
-        loadTags();
+          ...tagChanges.deletes.map((d) => deleteTag(id, d))
+        );
       }
 
+      const results = await Promise.allSettled(operations);
+      if (projectChanged) refreshProject();
+      if (tagOpsPending) await loadTags();
+
+      const failureCount = results.filter(
+        (result) => result.status === "rejected"
+      ).length;
+      if (failureCount > 0) {
+        throw new Error(
+          `${failureCount} save operation${failureCount === 1 ? "" : "s"} failed. The latest server state has been reloaded.`
+        );
+      }
       setSuccessMsg("Saved.");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save");

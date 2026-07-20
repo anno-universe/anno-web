@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useState } from "react";
 import { useParams, useOutletContext } from "react-router";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   getExportTasks,
   createExport,
@@ -37,6 +38,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { normalizeError } from "@/lib/utils/errors";
+import { queryKeys } from "@/lib/queryKeys";
 import type { ProjectContext } from "./_app.projects.$projectId";
 import type { ExportTaskOutput, ExportStatus } from "@/types/export";
 import { ACTIVE_EXPORT_STATUSES } from "@/types/export";
@@ -77,10 +79,6 @@ export default function ProjectExportsPage() {
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
-  const [tasks, setTasks] = useState<ExportTaskOutput[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [count, setCount] = useState(0);
   const [limit, setLimit] = useState(20);
   const [offset, setOffset] = useState(0);
 
@@ -93,51 +91,24 @@ export default function ProjectExportsPage() {
   const [deleteTarget, setDeleteTarget] = useState<ExportTaskOutput | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tasksQuery = useQuery({
+    queryKey: queryKeys.exports.list(pid, limit, offset),
+    queryFn: ({ signal }) => getExportTasks(pid, { limit, offset }, { signal }),
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) =>
+      query.state.data?.items.some((task) =>
+        ACTIVE_EXPORT_STATUSES.includes(task.status)
+      )
+        ? 3000
+        : false,
+  });
 
-  const fetchTasks = useCallback(async () => {
-    try {
-      const resp = await getExportTasks(pid, { limit, offset });
-      setTasks(resp.items);
-      setCount(resp.count);
-      setError("");
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load export tasks"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [pid, limit, offset]);
-
-  useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
-
-  useEffect(() => {
-    const hasActive = tasks.some((t) =>
-      ACTIVE_EXPORT_STATUSES.includes(t.status)
-    );
-
-    if (hasActive && !pollRef.current) {
-      pollRef.current = setInterval(fetchTasks, 3000);
-    } else if (!hasActive && pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [tasks, fetchTasks]);
+  const tasks = tasksQuery.data?.items ?? [];
+  const count = tasksQuery.data?.count ?? 0;
 
   function handlePageChange(newOffset: number, newLimit: number) {
     setOffset(newOffset);
     setLimit(newLimit);
-    setLoading(true);
   }
 
   async function handleCreate() {
@@ -153,7 +124,7 @@ export default function ProjectExportsPage() {
       const task = await createExport(pid, payload);
       setShowStartModal(false);
       toast.success(`Export task #${task.id} started (${task.format}).`);
-      await fetchTasks();
+      await tasksQuery.refetch();
     } catch (err: unknown) {
       toast.error(normalizeError(err).message);
     } finally {
@@ -176,7 +147,7 @@ export default function ProjectExportsPage() {
       await deleteExportFile(pid, deleteTarget.id);
       setDeleteTarget(null);
       toast.success("Export file deleted.");
-      await fetchTasks();
+      await tasksQuery.refetch();
     } catch (err: unknown) {
       toast.error(normalizeError(err).message);
     } finally {
@@ -311,11 +282,16 @@ export default function ProjectExportsPage() {
         )}
       </div>
 
-      {error && <ErrorAlert message={error} onRetry={fetchTasks} />}
+      {tasksQuery.isError && (
+        <ErrorAlert
+          message={tasksQuery.error.message}
+          onRetry={() => void tasksQuery.refetch()}
+        />
+      )}
 
-      {loading && count === 0 ? (
+      {tasksQuery.isPending ? (
         <SkeletonTable rows={4} />
-      ) : !loading && count === 0 ? (
+      ) : !tasksQuery.isFetching && count === 0 ? (
         <div className="rounded-md border bg-muted/30 px-4 py-12 text-center text-sm text-muted-foreground">
           No export tasks yet. Create one to export annotations in COCO or YOLO
           format.
@@ -326,7 +302,7 @@ export default function ProjectExportsPage() {
           rows={tasks}
           pagination={{ count, limit, offset }}
           onPageChange={handlePageChange}
-          isLoading={loading && count > 0}
+          isLoading={tasksQuery.isFetching && count > 0}
           getRowKey={(task) => task.id}
         />
       )}
