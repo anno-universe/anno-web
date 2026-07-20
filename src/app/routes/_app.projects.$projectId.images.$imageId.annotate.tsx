@@ -3,9 +3,7 @@ import { useParams, useNavigate } from "react-router";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { Pencil, Trash2 } from "lucide-react";
-import { getProject } from "@/api/projects";
 import {
-  getImage,
   getImages,
   getOriginalImageUrl,
 } from "@/api/images";
@@ -16,10 +14,7 @@ import {
   modifyAnnotation,
   deleteAnnotation,
 } from "@/api/annotations";
-import { getOperations } from "@/api/operations";
 import {
-  getProjectTags,
-  getImageTags,
   applyImageTag,
   removeImageTag,
 } from "@/api/tags";
@@ -54,6 +49,7 @@ import type { ContextMenuAction } from "@/components/annotation/ContextMenu";
 import type { InfoCardMode } from "@/components/annotation/AnnotationInfoCard";
 import type { AnnotationMapHandle } from "@/components/annotation/AnnotationMap";
 import { useAnnotationViewState } from "@/lib/annotation/annotationViewState";
+import { useAnnotationPageData } from "@/hooks/useAnnotationPageData";
 import {
   labelMappingLabels,
   upgradeMetaInfoConfig,
@@ -64,10 +60,7 @@ import type {
   Annotation2DOutput,
   Annotation2DCreateInput,
 } from "@/types/annotation";
-import type { OperationOutput } from "@/types/operation";
-import type { ProjectOutput } from "@/types/project";
 import type { Image2DOutput } from "@/types/image";
-import type { TagOutput, ImageTagOutput } from "@/types/tag";
 import type { ToolType } from "@/components/annotation/StatusBar";
 
 export default function AnnotatePage() {
@@ -76,15 +69,20 @@ export default function AnnotatePage() {
   const iid = Number(imageId);
   const user = useAuthStore((s) => s.user);
 
-  // Data
-  const [project, setProject] = useState<ProjectOutput | null>(null);
-  const [image, setImage] = useState<Image2DOutput | null>(null);
-  const [annotations, setAnnotations] = useState<Annotation2DOutput[]>([]);
-  const [operations, setOperations] = useState<OperationOutput[]>([]);
-  const [projectTags, setProjectTags] = useState<TagOutput[]>([]);
-  const [imageTags, setImageTags] = useState<ImageTagOutput[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const {
+    project,
+    image,
+    annotations,
+    setAnnotations,
+    operations,
+    projectTags,
+    imageTags,
+    setImageTags,
+    loading,
+    error,
+    reload,
+    refreshOperations,
+  } = useAnnotationPageData(pid, iid);
 
   // Image list for prev/next navigation
   const [imageList, setImageList] = useState<Image2DOutput[]>([]);
@@ -232,6 +230,11 @@ export default function AnnotatePage() {
           });
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : "Failed to upload image";
+          await Promise.allSettled([
+            svc.release(),
+            discardInteractiveSession(pid, iid, session.id),
+          ]);
+          serviceClientRef.current = null;
           dispatchInteractive({ type: "SESSION_ERROR", error: msg });
           toast.error(msg);
           setShowInteractiveModal(false);
@@ -479,47 +482,20 @@ export default function AnnotatePage() {
     cancelEditDispatch();
   }, [cancelEditDispatch]);
 
-  // ---- Data fetching ----
-  async function loadAll() {
-    setLoading(true);
-    setError("");
-    try {
-      // Fetch annotations/ops with max page size — map needs all annotations
-      const [proj, img, annResp, opsResp] = await Promise.all([
-        getProject(pid),
-        getImage(pid, iid),
-        getAnnotations(pid, iid, { limit: 500 }),
-        getOperations(pid, iid, { limit: 500 }),
-      ]);
-      setProject(proj);
-      setImage(img);
-      setAnnotations(annResp.items);
-      setOperations(opsResp.items);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-
-    // Tags — fetched separately so failures don't block the main page
-    loadTags();
-  }
-
-  async function loadTags() {
-    try {
-      const [ptags, itags] = await Promise.all([
-        getProjectTags(pid, { limit: 200, is_active: true }),
-        getImageTags(pid, iid),
-      ]);
-      setProjectTags(ptags.items);
-      setImageTags(itags);
-    } catch {
-      // non-blocking — tag bar just stays empty
-    }
-  }
-
+  // Release image-scoped inference resources when navigating or unmounting.
   useEffect(() => {
-    loadAll();
+    return () => {
+      const current = interactiveStateRef.current;
+      const serviceClient = serviceClientRef.current;
+      if (serviceClient) void serviceClient.release();
+      if (current.type !== "idle") {
+        void discardInteractiveSession(pid, iid, current.session.id);
+        dispatchInteractive({ type: "DISCARD" });
+      }
+      serviceClientRef.current = null;
+      mapRef.current?.clearSamPrompts();
+      mapRef.current?.setSamCandidate(null);
+    };
   }, [pid, iid]);
 
   // ---- Inference completion handler ----
@@ -585,15 +561,6 @@ export default function AnnotatePage() {
     },
     [navigate, pid],
   );
-
-  async function refreshOperations() {
-    try {
-      const opsResp = await getOperations(pid, iid, { limit: 500 });
-      setOperations(opsResp.items);
-    } catch {
-      // non-blocking
-    }
-  }
 
   // ---- Annotation handlers ----
 
@@ -1047,7 +1014,7 @@ export default function AnnotatePage() {
   if (error && !image) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12">
-        <ErrorAlert message={error} onRetry={loadAll} />
+        <ErrorAlert message={error} onRetry={reload} />
       </div>
     );
   }

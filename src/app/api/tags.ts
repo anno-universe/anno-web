@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from "./client";
+import type { ApiRequestOptions } from "./client";
 import type { PaginatedResponse, PaginationParams } from "@/types/api";
 import type {
   TagOutput,
@@ -13,11 +14,13 @@ import type {
 
 export function getProjectTags(
   projectId: number,
-  params?: PaginationParams & { is_active?: boolean }
+  params?: PaginationParams & { is_active?: boolean },
+  options?: ApiRequestOptions
 ): Promise<PaginatedResponse<TagOutput>> {
   return apiGet<PaginatedResponse<TagOutput>>(
     `/api/projects/${projectId}/tags/`,
-    params
+    params,
+    options
   );
 }
 
@@ -72,10 +75,13 @@ export function deleteTag(
 
 export function getImageTags(
   projectId: number,
-  imageId: number
+  imageId: number,
+  options?: ApiRequestOptions
 ): Promise<ImageTagOutput[]> {
   return apiGet<ImageTagOutput[]>(
-    `/api/projects/${projectId}/images/${imageId}/tags/`
+    `/api/projects/${projectId}/images/${imageId}/tags/`,
+    undefined,
+    options
   );
 }
 

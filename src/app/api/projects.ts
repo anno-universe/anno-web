@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from "./client";
+import type { ApiRequestOptions } from "./client";
 import type { PaginatedResponse, PaginationParams } from "@/types/api";
 import type {
   ProjectOutput,
@@ -10,13 +11,17 @@ import type {
 } from "@/types/project";
 
 export function getProjects(
-  params?: PaginationParams
+  params?: PaginationParams,
+  options?: ApiRequestOptions
 ): Promise<PaginatedResponse<ProjectOutput>> {
-  return apiGet<PaginatedResponse<ProjectOutput>>("/api/projects/", params);
+  return apiGet<PaginatedResponse<ProjectOutput>>("/api/projects/", params, options);
 }
 
-export function getProject(id: number): Promise<ProjectOutput> {
-  return apiGet<ProjectOutput>(`/api/projects/${id}`);
+export function getProject(
+  id: number,
+  options?: ApiRequestOptions
+): Promise<ProjectOutput> {
+  return apiGet<ProjectOutput>(`/api/projects/${id}`, undefined, options);
 }
 
 export function createProject(

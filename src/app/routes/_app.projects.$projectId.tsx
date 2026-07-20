@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMemo } from "react";
 import { Outlet, useParams, NavLink, useLocation } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import { getProject } from "@/api/projects";
 import { ProjectRoleBadge } from "@/components/project/ProjectRoleBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { useSetBreadcrumb } from "@/lib/breadcrumb";
+import { queryKeys } from "@/lib/queryKeys";
 import type { ProjectOutput } from "@/types/project";
 
 export interface ProjectContext {
@@ -23,32 +25,23 @@ export default function ProjectLayout() {
   const id = Number(projectId);
   const location = useLocation();
 
-  const [project, setProject] = useState<ProjectOutput | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const fetchProject = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await getProject(id);
-      setProject(data);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load project");
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    fetchProject();
-  }, [fetchProject]);
+  const projectQuery = useQuery({
+    queryKey: queryKeys.projects.detail(id),
+    queryFn: ({ signal }) => getProject(id, { signal }),
+  });
+  const project = projectQuery.data ?? null;
+  const refreshProject = useMemo(
+    () => () => {
+      void projectQuery.refetch();
+    },
+    [projectQuery.refetch]
+  );
 
   // Register project name as a dynamic breadcrumb segment.
   useSetBreadcrumb("project", project?.name ?? null);
 
   // Only render Outlet when we have project data — children receive guaranteed project
-  if (loading) {
+  if (projectQuery.isPending) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-8">
         <div className="mb-6">
@@ -63,10 +56,13 @@ export default function ProjectLayout() {
     );
   }
 
-  if (error) {
+  if (projectQuery.isError) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12">
-        <ErrorAlert message={error} onRetry={fetchProject} />
+        <ErrorAlert
+          message={projectQuery.error.message}
+          onRetry={() => void projectQuery.refetch()}
+        />
       </div>
     );
   }
@@ -173,7 +169,7 @@ export default function ProjectLayout() {
       </div>
 
       {/* Child content */}
-      <Outlet context={{ project, refreshProject: fetchProject }} />
+      <Outlet context={{ project, refreshProject }} />
     </div>
   );
 }

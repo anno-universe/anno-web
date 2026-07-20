@@ -1,4 +1,5 @@
 import { api, apiGet, apiPost, apiDelete } from "@/api/client";
+import type { ApiRequestOptions } from "@/api/client";
 import type { PaginatedResponse, PaginationParams } from "@/types/api";
 import type {
   ExportCreateInput,
@@ -8,11 +9,13 @@ import type {
 
 export function getExportTasks(
   projectId: number,
-  params?: PaginationParams
+  params?: PaginationParams,
+  options?: ApiRequestOptions
 ): Promise<PaginatedResponse<ExportTaskOutput>> {
   return apiGet<PaginatedResponse<ExportTaskOutput>>(
     `/api/projects/${projectId}/exports/`,
-    params as Record<string, unknown>
+    params as Record<string, unknown>,
+    options
   );
 }
 

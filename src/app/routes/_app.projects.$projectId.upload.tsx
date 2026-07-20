@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useParams, useOutletContext } from "react-router";
 import { CheckCircle, AlertCircle, X, Loader2 } from "lucide-react";
 import { normalizeError } from "@/lib/utils/errors";
+import { runBoundedTasks } from "@/lib/utils/concurrency";
 import { uploadImage } from "@/api/images";
 import { ImageUploadZone } from "@/components/image/ImageUploadZone";
 import { Button } from "@/components/ui/button";
@@ -104,7 +105,11 @@ export default function UploadPage() {
   const [files, setFiles] = useState<UploadFileEntry[]>([]);
   const [uploading, setUploading] = useState(false);
   const [batchComplete, setBatchComplete] = useState(false);
-  const abortRef = useRef(false);
+  const batchIdRef = useRef(0);
+  const activeBatchRef = useRef<{
+    id: number;
+    controller: AbortController;
+  } | null>(null);
 
   // ---- pagination ----
   const DEFAULT_PAGE_SIZE = 20;
@@ -122,10 +127,10 @@ export default function UploadPage() {
     });
   }, [files.length, pageSize]);
 
-  // Cleanup abort on unmount
+  // Cancel transport work on unmount.
   useEffect(() => {
     return () => {
-      abortRef.current = true;
+      activeBatchRef.current?.controller.abort();
     };
   }, []);
 
@@ -154,60 +159,82 @@ export default function UploadPage() {
 
   async function handleUploadAll() {
     const pending = files.filter((f) => f.status === "pending");
-    if (pending.length === 0) return;
+    if (pending.length === 0 || activeBatchRef.current) return;
 
+    const batchId = ++batchIdRef.current;
+    const controller = new AbortController();
+    activeBatchRef.current = { id: batchId, controller };
     setUploading(true);
     setBatchComplete(false);
-    abortRef.current = false;
+    let succeeded = 0;
+    let failed = 0;
 
-    for (const entry of pending) {
-      if (abortRef.current) break;
-
-      setFiles((prev) =>
-        prev.map((f) => (f.id === entry.id ? { ...f, status: "uploading" } : f))
-      );
-
-      try {
-        const result = await uploadImage(pid, entry.file);
+    await runBoundedTasks(
+      pending,
+      3,
+      async (entry) => {
         setFiles((prev) =>
           prev.map((f) =>
-            f.id === entry.id ? { ...f, status: "success", result } : f
+            f.id === entry.id ? { ...f, status: "uploading" } : f
           )
         );
-      } catch (err: unknown) {
-        const message = normalizeError(err).message;
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.id === entry.id
-              ? { ...f, status: "error", errorMessage: message }
-              : f
-          )
-        );
-      }
+
+        try {
+          const result = await uploadImage(pid, entry.file, {
+            signal: controller.signal,
+          });
+          if (controller.signal.aborted) return;
+          succeeded += 1;
+          setFiles((prev) =>
+            prev.map((f) =>
+              f.id === entry.id ? { ...f, status: "success", result } : f
+            )
+          );
+        } catch (err: unknown) {
+          if (controller.signal.aborted) return;
+          failed += 1;
+          const message = normalizeError(err).message;
+          setFiles((prev) =>
+            prev.map((f) =>
+              f.id === entry.id
+                ? { ...f, status: "error", errorMessage: message }
+                : f
+            )
+          );
+        }
+      },
+      controller.signal
+    );
+
+    if (activeBatchRef.current?.id !== batchId) return;
+    activeBatchRef.current = null;
+    setUploading(false);
+
+    if (succeeded > 0) refreshProject();
+    if (controller.signal.aborted) {
+      setBatchComplete(false);
+      return;
     }
 
-    setUploading(false);
     setBatchComplete(true);
-
-    // Refresh project data (e.g. image counts)
-    refreshProject();
-
-    // Use final setFiles callback to get accurate counts
-    setFiles((current) => {
-      const ok = current.filter((f) => f.status === "success").length;
-      const fail = current.filter((f) => f.status === "error").length;
-      if (fail > 0) {
-        toast.error(`${ok} uploaded, ${fail} failed`);
-      } else {
-        toast.success(`${ok} image${ok !== 1 ? "s" : ""} uploaded`);
-      }
-      return current;
-    });
+    if (failed > 0) {
+      toast.error(`${succeeded} uploaded, ${failed} failed`);
+    } else {
+      toast.success(
+        `${succeeded} image${succeeded !== 1 ? "s" : ""} uploaded`
+      );
+    }
   }
 
   function handleCancel() {
-    abortRef.current = true;
-    setUploading(false);
+    activeBatchRef.current?.controller.abort();
+    setFiles((prev) =>
+      prev.map((entry) =>
+        entry.status === "uploading"
+          ? { ...entry, status: "pending", errorMessage: undefined }
+          : entry
+      )
+    );
   }
 
   // ---- derived counts ----

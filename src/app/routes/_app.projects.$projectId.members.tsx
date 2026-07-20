@@ -83,6 +83,7 @@ export default function ProjectMembersPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined
   );
+  const searchAbortRef = useRef<AbortController | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { confirm, ConfirmDialog } = useConfirm();
@@ -126,6 +127,7 @@ export default function ProjectMembersPage() {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
+    searchAbortRef.current?.abort();
 
     if (!query.trim()) {
       setSearchResults([]);
@@ -135,16 +137,23 @@ export default function ProjectMembersPage() {
 
     setSearchingUsers(true);
     debounceRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
       try {
-        const data = await searchUsers({ q: query, limit: 10 });
+        const data = await searchUsers(
+          { q: query, limit: 10 },
+          { signal: controller.signal }
+        );
+        if (controller.signal.aborted) return;
         setSearchResults(data.items);
       } catch (err: unknown) {
+        if (controller.signal.aborted) return;
         setSearchError(
           err instanceof Error ? err.message : "Search failed"
         );
         setSearchResults([]);
       } finally {
-        setSearchingUsers(false);
+        if (!controller.signal.aborted) setSearchingUsers(false);
       }
     }, 300);
   }
@@ -153,6 +162,7 @@ export default function ProjectMembersPage() {
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      searchAbortRef.current?.abort();
     };
   }, []);
 

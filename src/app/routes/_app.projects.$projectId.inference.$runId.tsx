@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useOutletContext, Link } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   getInferenceRun,
   cancelInferenceRun,
@@ -29,9 +30,9 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useSetBreadcrumb } from "@/lib/breadcrumb";
 import { cn } from "@/lib/utils";
+import { queryKeys } from "@/lib/queryKeys";
 import { ArrowLeft } from "lucide-react";
 import type { ProjectContext } from "./_app.projects.$projectId";
-import type { InferenceProviderOutput } from "@/types/inferenceProvider";
 import type { RunDetailOutput } from "@/types/inferenceRun";
 import { ACTIVE_RUN_STATUSES, TERMINAL_RUN_STATUSES } from "@/types/inferenceRun";
 
@@ -53,22 +54,6 @@ export default function ProjectInferenceRunDetailPage() {
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
-  if (!isSupervisor) {
-    return (
-      <div className="rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-        Your role is {project.my_role ?? "none"}. Inference run details are only
-        available to supervisors.
-      </div>
-    );
-  }
-
-  const [run, setRun] = useState<RunDetailOutput | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  // Providers (for name lookup)
-  const [providers, setProviders] = useState<InferenceProviderOutput[]>([]);
-
   // Cancel
   const [cancelTarget, setCancelTarget] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -77,8 +62,25 @@ export default function ProjectInferenceRunDetailPage() {
   const [retryTarget, setRetryTarget] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
-  // Polling
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const runQuery = useQuery({
+    queryKey: queryKeys.inference.run(pid, rid),
+    queryFn: ({ signal }) => getInferenceRun(pid, rid, { signal }),
+    enabled: isSupervisor,
+    refetchInterval: (query) => {
+      const run = query.state.data;
+      return run && !TERMINAL_RUN_STATUSES.includes(run.status) ? 5000 : false;
+    },
+  });
+
+  const providersQuery = useQuery({
+    queryKey: queryKeys.inference.providers(pid),
+    queryFn: ({ signal }) =>
+      getInferenceProviders(pid, { limit: 100 }, { signal }),
+    enabled: isSupervisor,
+  });
+
+  const run = runQuery.data ?? null;
+  const providers = providersQuery.data?.items ?? [];
 
   const providerMap = useMemo(
     () => new Map(providers.map((p) => [p.id, p])),
@@ -90,53 +92,14 @@ export default function ProjectInferenceRunDetailPage() {
   const runLabel = run ? `Run #${run.id}` : `Run #${rid}`;
   useSetBreadcrumb("inferenceRun", runLabel);
 
-  const fetchRun = useCallback(async () => {
-    try {
-      const detail = await getInferenceRun(pid, rid);
-      setRun(detail);
-      setError("");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load run");
-    } finally {
-      setLoading(false);
-    }
-  }, [pid, rid]);
-
-  const fetchProviders = useCallback(async () => {
-    try {
-      const resp = await getInferenceProviders(pid, { limit: 100 });
-      setProviders(resp.items);
-    } catch {
-      // non-blocking
-    }
-  }, [pid]);
-
-  useEffect(() => {
-    fetchRun();
-    fetchProviders();
-  }, [fetchRun, fetchProviders]);
-
-  // Polling while run is active
-  useEffect(() => {
-    if (!run || TERMINAL_RUN_STATUSES.includes(run.status)) {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      return;
-    }
-
-    if (!pollRef.current) {
-      pollRef.current = setInterval(fetchRun, 5000);
-    }
-
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [run, fetchRun]);
+  if (!isSupervisor) {
+    return (
+      <div className="rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+        Your role is {project.my_role ?? "none"}. Inference run details are only
+        available to supervisors.
+      </div>
+    );
+  }
 
   // ---- Cancel ----
   async function handleCancel() {
@@ -145,7 +108,7 @@ export default function ProjectInferenceRunDetailPage() {
       await cancelInferenceRun(pid, rid);
       setCancelTarget(false);
       toast.success("Cancellation requested.");
-      await fetchRun();
+      await runQuery.refetch();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to cancel run");
     } finally {
@@ -160,7 +123,7 @@ export default function ProjectInferenceRunDetailPage() {
       await retryInferenceRun(pid, rid);
       setRetryTarget(false);
       toast.success("Run retry queued.");
-      await fetchRun();
+      await runQuery.refetch();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to retry run");
     } finally {
@@ -169,7 +132,7 @@ export default function ProjectInferenceRunDetailPage() {
   }
 
   // ---- Render ----
-  if (loading) {
+  if (runQuery.isPending) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-8">
         <Skeleton className="mb-4 h-7 w-48" />
@@ -184,10 +147,13 @@ export default function ProjectInferenceRunDetailPage() {
     );
   }
 
-  if (error) {
+  if (runQuery.isError) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-12">
-        <ErrorAlert message={error} onRetry={fetchRun} />
+        <ErrorAlert
+          message={runQuery.error.message}
+          onRetry={() => void runQuery.refetch()}
+        />
       </div>
     );
   }

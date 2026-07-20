@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { Link, useParams, useOutletContext, useNavigate, useSearchParams } from "react-router";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getImages } from "@/api/images";
 import { getProjectTags } from "@/api/tags";
 import { AuthenticatedImage } from "@/components/image/AuthenticatedImage";
@@ -18,8 +19,8 @@ import {
 } from "@/components/shared/PaginatedTable";
 import { getThumbnailUrl } from "@/api/images";
 import { Upload, PenTool } from "lucide-react";
+import { queryKeys } from "@/lib/queryKeys";
 import type { Image2DOutput } from "@/types/image";
-import type { TagOutput } from "@/types/tag";
 import type { ProjectContext } from "./_app.projects.$projectId";
 
 const DEFAULT_LIMIT = 20;
@@ -120,11 +121,6 @@ export default function ImagesPage() {
   const navigate = useNavigate();
   const { project } = useOutletContext<ProjectContext>();
 
-  const [images, setImages] = useState<Image2DOutput[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [projectTags, setProjectTags] = useState<TagOutput[]>([]);
-
   // Derive pagination + tag filter from URL search params
   const [searchParams, setSearchParams] = useSearchParams();
   const offset =
@@ -136,12 +132,29 @@ export default function ImagesPage() {
     .split(",")
     .filter(Boolean);
 
-  // Server-provided pagination metadata (count comes from API)
-  const [count, setCount] = useState(0);
-  const [serverLimit, setServerLimit] = useState(limit);
-  const [serverOffset, setServerOffset] = useState(offset);
-
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
+
+  const imagesQuery = useQuery({
+    queryKey: queryKeys.images.list(pid, { limit, offset, tags: tagFilter }),
+    queryFn: ({ signal }) => {
+      const params: Record<string, unknown> = { limit, offset };
+      if (tagFilter.length > 0) params.tag = tagFilter.join(",");
+      return getImages(pid, params, { signal });
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const tagsQuery = useQuery({
+    queryKey: queryKeys.images.tags(pid),
+    queryFn: ({ signal }) =>
+      getProjectTags(pid, { limit: 200, is_active: true }, { signal }),
+  });
+
+  const images = imagesQuery.data?.items ?? [];
+  const count = imagesQuery.data?.count ?? 0;
+  const serverLimit = imagesQuery.data?.limit ?? limit;
+  const serverOffset = imagesQuery.data?.offset ?? offset;
+  const projectTags = tagsQuery.data?.items ?? [];
 
   const handleAnnotate = useCallback(
     (imageId: number) => {
@@ -149,35 +162,6 @@ export default function ImagesPage() {
     },
     [navigate, pid],
   );
-
-  async function fetchImages(
-    fetchLimit: number,
-    fetchOffset: number,
-    tags?: string[],
-  ) {
-    setLoading(true);
-    setError("");
-    try {
-      const params: Record<string, unknown> = {
-        limit: fetchLimit,
-        offset: fetchOffset,
-      };
-      if (tags && tags.length > 0) params.tag = tags.join(",");
-      const imageData = await getImages(pid, params);
-      setImages(imageData.items);
-      setCount(imageData.count);
-      setServerLimit(imageData.limit);
-      setServerOffset(imageData.offset);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load images");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    fetchImages(limit, offset, tagFilter.length > 0 ? tagFilter : undefined);
-  }, [pid, offset, limit, tagFilter.join(",")]);
 
   // Persist search params so the breadcrumb "Images" link can restore them
   useEffect(() => {
@@ -188,13 +172,6 @@ export default function ImagesPage() {
       sessionStorage.removeItem(`images_search_${pid}`);
     }
   }, [pid, searchParams]);
-
-  // Fetch project tags for the filter dropdown
-  useEffect(() => {
-    getProjectTags(pid, { limit: 200, is_active: true })
-      .then((resp) => setProjectTags(resp.items))
-      .catch(() => {});
-  }, [pid]);
 
   function handlePageChange(newOffset: number, newLimit: number) {
     setSearchParams(
@@ -208,7 +185,7 @@ export default function ImagesPage() {
     );
   }
 
-  if (loading && images.length === 0) {
+  if (imagesQuery.isPending) {
     return (
       <div>
         <div className="mb-4 flex items-center justify-between">
@@ -220,11 +197,11 @@ export default function ImagesPage() {
     );
   }
 
-  if (error && images.length === 0) {
+  if (imagesQuery.isError && images.length === 0) {
     return (
       <ErrorAlert
-        message={error}
-        onRetry={() => fetchImages(limit, offset, tagFilter.length > 0 ? tagFilter : undefined)}
+        message={imagesQuery.error.message}
+        onRetry={() => imagesQuery.refetch()}
       />
     );
   }
@@ -325,7 +302,7 @@ export default function ImagesPage() {
         )}
       </div>
 
-      {!loading && count === 0 ? (
+      {!imagesQuery.isFetching && count === 0 ? (
         <Empty>
           <EmptyHeader>
             <EmptyTitle>No images yet</EmptyTitle>
@@ -337,7 +314,7 @@ export default function ImagesPage() {
           rows={images}
           pagination={{ count, limit: serverLimit, offset: serverOffset }}
           onPageChange={handlePageChange}
-          isLoading={loading}
+          isLoading={imagesQuery.isFetching}
           getRowKey={(img) => img.id}
         />
       )}

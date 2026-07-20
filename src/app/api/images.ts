@@ -1,35 +1,43 @@
 import { apiGet, apiPostForm, apiGetBlob } from "./client";
+import type { ApiRequestOptions } from "./client";
 import type { PaginatedResponse, PaginationParams } from "@/types/api";
 import type { Image2DOutput } from "@/types/image";
 
 export function getImages(
   projectId: number,
-  params?: PaginationParams
+  params?: PaginationParams,
+  options?: ApiRequestOptions
 ): Promise<PaginatedResponse<Image2DOutput>> {
   return apiGet<PaginatedResponse<Image2DOutput>>(
     `/api/projects/${projectId}/images/`,
-    params
+    params,
+    options
   );
 }
 
 export function getImage(
   projectId: number,
-  imageId: number
+  imageId: number,
+  options?: ApiRequestOptions
 ): Promise<Image2DOutput> {
   return apiGet<Image2DOutput>(
-    `/api/projects/${projectId}/images/${imageId}`
+    `/api/projects/${projectId}/images/${imageId}`,
+    undefined,
+    options
   );
 }
 
 export function uploadImage(
   projectId: number,
-  file: File
+  file: File,
+  options?: ApiRequestOptions
 ): Promise<Image2DOutput> {
   const form = new FormData();
   form.append("file", file);
   return apiPostForm<Image2DOutput>(
     `/api/projects/${projectId}/images/`,
-    form
+    form,
+    options
   );
 }
 
