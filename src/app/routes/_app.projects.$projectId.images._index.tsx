@@ -304,7 +304,7 @@ export default function ImagesPage() {
         )}
       </div>
 
-      {!imagesQuery.isFetching && count === 0 ? (
+      {!imagesQuery.isFetching && count === 0 && tagFilter.length === 0 ? (
         <Empty>
           <EmptyHeader>
             <EmptyTitle>No images yet</EmptyTitle>
