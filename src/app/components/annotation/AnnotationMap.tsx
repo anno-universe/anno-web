@@ -1020,7 +1020,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         onSelectRef.current?.(sel ? ((sel.getId() as number) ?? null) : null);
       });
       const drawBoxStartKey = drawBox.on("drawstart", () =>
-        onDrawPreviewRef.current?.("drawing...")
+        onDrawPreviewRef.current?.("drawing…")
       );
       const drawBoxEndKey = drawBox.on("drawend", (e) => {
         onDrawPreviewRef.current?.(null);

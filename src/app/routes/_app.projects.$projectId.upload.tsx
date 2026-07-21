@@ -218,10 +218,10 @@ export default function UploadPage() {
 
     setBatchComplete(true);
     if (failed > 0) {
-      toast.error(`${succeeded} uploaded, ${failed} failed`);
+      toast.error(`${succeeded} uploaded, ${failed} failed.`);
     } else {
       toast.success(
-        `${succeeded} image${succeeded !== 1 ? "s" : ""} uploaded`
+        `${succeeded} image${succeeded !== 1 ? "s" : ""} uploaded.`
       );
     }
   }

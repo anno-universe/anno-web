@@ -6,11 +6,18 @@ import {
   updateApiKey,
   deleteApiKey,
 } from "@/api/apiKeys";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Spinner } from "@/components/shared/LoadingSpinner";
 import { SkeletonTable } from "@/components/shared/SkeletonTable";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { RoleNotice } from "@/components/shared/RoleNotice";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -217,10 +224,7 @@ export default function ProjectDeveloperPage() {
   if (!isSupervisor) {
     return (
       <div>
-        <div className="mb-6 rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-          Your role is worker. API key management is only available to
-          supervisors.
-        </div>
+        <RoleNotice area="API keys" className="mb-6" />
       </div>
     );
   }
@@ -263,49 +267,53 @@ export default function ProjectDeveloperPage() {
           <DialogHeader>
             <DialogTitle>Create API Key</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <Field>
-              <FieldLabel htmlFor="keyName">Name</FieldLabel>
-              <Input
-                id="keyName"
-                type="text"
-                value={newKeyName}
-                onChange={(e) => setNewKeyName(e.target.value)}
-                placeholder="e.g. inference-worker-1"
-              />
-            </Field>
-            <Field>
-              <FieldLabel>Expires (optional)</FieldLabel>
-              <DatePicker
-                date={newKeyExpires}
-                onDateChange={setNewKeyExpires}
-                placeholder="No expiration"
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreate();
+            }}
+          >
+            <div className="flex flex-col gap-4">
+              <Field>
+                <FieldLabel htmlFor="keyName">Name</FieldLabel>
+                <Input
+                  id="keyName"
+                  type="text"
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                  placeholder="e.g. inference-worker-1"
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Expires (optional)</FieldLabel>
+                <DatePicker
+                  date={newKeyExpires}
+                  onDateChange={setNewKeyExpires}
+                  placeholder="No expiration"
+                  disabled={creating}
+                  fromDate={new Date()}
+                />
+              </Field>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowCreateForm(false);
+                  setNewKeyName("");
+                  setNewKeyExpires(undefined);
+                }}
                 disabled={creating}
-                fromDate={new Date()}
-              />
-            </Field>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setShowCreateForm(false);
-                setNewKeyName("");
-                setNewKeyExpires(undefined);
-              }}
-              disabled={creating}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleCreate}
-              disabled={creating || !newKeyName.trim()}
-            >
-              {creating ? <LoadingSpinner /> : "Create"}
-            </Button>
-          </DialogFooter>
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating || !newKeyName.trim()}>
+                {creating ? <Spinner /> : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -320,56 +328,60 @@ export default function ProjectDeveloperPage() {
           <DialogHeader>
             <DialogTitle>Edit API Key</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <Field>
-              <FieldLabel htmlFor="editKeyName">Name</FieldLabel>
-              <Input
-                id="editKeyName"
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-              />
-            </Field>
-            <Field>
-              <FieldLabel>Active</FieldLabel>
-              <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                <Switch
-                  checked={editIsActive}
-                  onCheckedChange={setEditIsActive}
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleUpdate();
+            }}
+          >
+            <div className="flex flex-col gap-4">
+              <Field>
+                <FieldLabel htmlFor="editKeyName">Name</FieldLabel>
+                <Input
+                  id="editKeyName"
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
                 />
-                <span className="text-sm">
-                  {editIsActive ? "Active" : "Inactive"}
-                </span>
-              </label>
-            </Field>
-            <Field>
-              <FieldLabel>Expires (optional)</FieldLabel>
-              <DatePicker
-                date={editExpires}
-                onDateChange={setEditExpires}
-                placeholder="No expiration"
+              </Field>
+              <Field>
+                <FieldLabel>Active</FieldLabel>
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <Switch
+                    checked={editIsActive}
+                    onCheckedChange={setEditIsActive}
+                  />
+                  <span className="text-sm">
+                    {editIsActive ? "Active" : "Inactive"}
+                  </span>
+                </label>
+              </Field>
+              <Field>
+                <FieldLabel>Expires (optional)</FieldLabel>
+                <DatePicker
+                  date={editExpires}
+                  onDateChange={setEditExpires}
+                  placeholder="No expiration"
+                  disabled={saving}
+                  fromDate={new Date()}
+                />
+              </Field>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={cancelEdit}
                 disabled={saving}
-                fromDate={new Date()}
-              />
-            </Field>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={cancelEdit}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleUpdate}
-              disabled={saving || !editName.trim()}
-            >
-              {saving ? <LoadingSpinner /> : "Save"}
-            </Button>
-          </DialogFooter>
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving || !editName.trim()}>
+                {saving ? <Spinner /> : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -380,10 +392,14 @@ export default function ProjectDeveloperPage() {
       {loading ? (
         <SkeletonTable rows={3} />
       ) : keys.length === 0 ? (
-        <div className="rounded-md border bg-muted/30 px-4 py-12 text-center text-sm text-muted-foreground">
-          No API keys yet. Create one to allow external services to access this
-          project's API.
-        </div>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No API keys yet</EmptyTitle>
+            <EmptyDescription>
+              Create one to let external services access this project's API.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <div className="rounded-md border">
           <Table>

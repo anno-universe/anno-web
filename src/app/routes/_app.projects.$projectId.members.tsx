@@ -10,6 +10,7 @@ import { searchUsers } from "@/api/users";
 import { PaginatedTable } from "@/components/shared/PaginatedTable";
 import { SkeletonTable } from "@/components/shared/SkeletonTable";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
+import { RoleNotice } from "@/components/shared/RoleNotice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -42,6 +43,11 @@ import type { Column, PaginationState } from "@/components/shared/PaginatedTable
 import type { ProjectMemberOutput } from "@/types/project";
 import type { UserSearchResult } from "@/types/user";
 import type { ProjectContext } from "./_app.projects.$projectId";
+
+const ROLE_LABELS: Record<"worker" | "supervisor", string> = {
+  worker: "Worker",
+  supervisor: "Supervisor",
+};
 
 export default function ProjectMembersPage() {
   const { projectId } = useParams();
@@ -192,7 +198,7 @@ export default function ProjectMembersPage() {
     setAddingMember(true);
     try {
       await addMember(id, { user_id: selectedUser.id, role: addRole });
-      toast.success(`${selectedUser.username} added as ${addRole}`);
+      toast.success(`${selectedUser.username} added as ${ROLE_LABELS[addRole]}.`);
       fetchMembers(pagination.offset, pagination.limit);
       // Reset form
       setSelectedUser(null);
@@ -212,7 +218,7 @@ export default function ProjectMembersPage() {
     setRoleUpdatingUserId(userId);
     try {
       await updateMemberRole(id, userId, { role: newRole });
-      toast.success("Role updated");
+      toast.success("Role updated.");
       fetchMembers(pagination.offset, pagination.limit);
     } catch (err: unknown) {
       const msg =
@@ -237,7 +243,9 @@ export default function ProjectMembersPage() {
     setRemovingUserId(userId);
     try {
       await removeMember(id, userId);
-      toast.success(member ? `${member.username} removed` : "Member removed");
+      toast.success(
+        member ? `${member.username} removed.` : "Member removed."
+      );
       fetchMembers(pagination.offset, pagination.limit);
     } catch (err: unknown) {
       const msg =
@@ -310,10 +318,7 @@ export default function ProjectMembersPage() {
     <div>
       {/* Worker banner — defense in depth */}
       {!isSupervisor && (
-        <div className="mb-6 rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-          Your role is worker. Membership management is restricted to
-          supervisors.
-        </div>
+        <RoleNotice area="member management" className="mb-6" />
       )}
 
       {/* Header + Add button */}
@@ -355,124 +360,128 @@ export default function ProjectMembersPage() {
           <DialogHeader>
             <DialogTitle>Add Member</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col gap-4">
-            {/* Search input */}
-            <div ref={searchContainerRef} className="relative">
-              <Field>
-                <FieldLabel htmlFor="member-search">
-                  Search users by username
-                </FieldLabel>
-                <Input
-                  id="member-search"
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  placeholder="Type a username..."
-                  disabled={addingMember}
-                />
-              </Field>
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleAddMember();
+            }}
+          >
+            <div className="flex flex-col gap-4">
+              {/* Search input */}
+              <div ref={searchContainerRef} className="relative">
+                <Field>
+                  <FieldLabel htmlFor="member-search">
+                    Search users by username
+                  </FieldLabel>
+                  <Input
+                    id="member-search"
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    placeholder="Type a username…"
+                    disabled={addingMember}
+                  />
+                </Field>
 
-              {/* Search results */}
-              {searchQuery && !selectedUser && (
-                <div className="mt-1 w-full rounded-md border bg-card shadow-lg max-h-48 overflow-y-auto">
-                  {searchingUsers && (
-                    <div className="px-3 py-2 text-sm text-muted-foreground">
-                      Searching...
-                    </div>
-                  )}
-                  {!searchingUsers &&
-                    searchResults.length > 0 &&
-                    searchResults.map((user) => (
-                      <button
-                        key={user.id}
-                        type="button"
-                        onClick={() => handleSelectUser(user)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex flex-col"
-                      >
-                        <span className="font-medium">{user.username}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {user.email}
-                        </span>
-                      </button>
-                    ))}
-                  {!searchingUsers &&
-                    searchResults.length === 0 && (
+                {/* Search results */}
+                {searchQuery && !selectedUser && (
+                  <div className="mt-1 w-full rounded-md border bg-card shadow-lg max-h-48 overflow-y-auto">
+                    {searchingUsers && (
                       <div className="px-3 py-2 text-sm text-muted-foreground">
-                        No users found
+                        Searching…
                       </div>
                     )}
-                </div>
+                    {!searchingUsers &&
+                      searchResults.length > 0 &&
+                      searchResults.map((user) => (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => handleSelectUser(user)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex flex-col"
+                        >
+                          <span className="font-medium">{user.username}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {user.email}
+                          </span>
+                        </button>
+                      ))}
+                    {!searchingUsers &&
+                      searchResults.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          No users found
+                        </div>
+                      )}
+                  </div>
+                )}
+              </div>
+
+              {/* Role selection (only after user is selected) */}
+              {selectedUser && (
+                <Field>
+                  <FieldLabel htmlFor="member-role">Role</FieldLabel>
+                  <Select
+                    value={addRole}
+                    onValueChange={(v) =>
+                      setAddRole(v as "worker" | "supervisor")
+                    }
+                    disabled={addingMember}
+                  >
+                    <SelectTrigger id="member-role" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="worker">Worker</SelectItem>
+                        <SelectItem value="supervisor">Supervisor</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+
+              {searchError && (
+                <p className="text-xs text-destructive">{searchError}</p>
+              )}
+
+              {/* Selection summary */}
+              {selectedUser && (
+                <p className="text-sm text-muted-foreground">
+                  Adding{" "}
+                  <span className="font-medium text-foreground">
+                    {selectedUser.username}
+                  </span>
+                  {selectedUser.email && <> ({selectedUser.email})</>} as{" "}
+                  <span className="font-medium text-foreground capitalize">
+                    {addRole}
+                  </span>
+                </p>
               )}
             </div>
-
-            {/* Role selection (only after user is selected) */}
-            {selectedUser && (
-              <Field>
-                <FieldLabel htmlFor="member-role">Role</FieldLabel>
-                <Select
-                  value={addRole}
-                  onValueChange={(v) =>
-                    setAddRole(v as "worker" | "supervisor")
-                  }
-                  disabled={addingMember}
-                >
-                  <SelectTrigger id="member-role" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="worker">Worker</SelectItem>
-                      <SelectItem value="supervisor">Supervisor</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-            )}
-
-            {searchError && (
-              <p className="text-xs text-destructive">{searchError}</p>
-            )}
-
-            {/* Selection summary */}
-            {selectedUser && (
-              <p className="text-sm text-muted-foreground">
-                Adding{" "}
-                <span className="font-medium text-foreground">
-                  {selectedUser.username}
-                </span>
-                {selectedUser.email && <> ({selectedUser.email})</>} as{" "}
-                <span className="font-medium text-foreground capitalize">
-                  {addRole}
-                </span>
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setShowAddForm(false);
-                setSearchQuery("");
-                setSearchResults([]);
-                setSelectedUser(null);
-                setSearchError("");
-              }}
-              disabled={addingMember}
-            >
-              Cancel
-            </Button>
-            {selectedUser && (
+            <DialogFooter>
               <Button
                 type="button"
-                onClick={handleAddMember}
+                variant="outline"
+                onClick={() => {
+                  setShowAddForm(false);
+                  setSearchQuery("");
+                  setSearchResults([]);
+                  setSelectedUser(null);
+                  setSearchError("");
+                }}
                 disabled={addingMember}
               >
-                {addingMember ? "Adding..." : `Add as ${addRole}`}
+                Cancel
               </Button>
-            )}
-          </DialogFooter>
+              {selectedUser && (
+                <Button type="submit" disabled={addingMember}>
+                  {addingMember ? "Adding…" : `Add as ${ROLE_LABELS[addRole]}`}
+                </Button>
+              )}
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

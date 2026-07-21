@@ -9,6 +9,7 @@ import {
 import { getInferenceProviders } from "@/api/inferenceProviders";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
+import { RoleNotice } from "@/components/shared/RoleNotice";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { RunStatusBadge } from "@/components/inference/RunStatusBadge";
 import { Button } from "@/components/ui/button";
@@ -93,12 +94,7 @@ export default function ProjectInferenceRunDetailPage() {
   useSetBreadcrumb("inferenceRun", runLabel);
 
   if (!isSupervisor) {
-    return (
-      <div className="rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-        Your role is {project.my_role ?? "none"}. Inference run details are only
-        available to supervisors.
-      </div>
-    );
+    return <RoleNotice area="inference runs" />;
   }
 
   // ---- Cancel ----

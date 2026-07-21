@@ -50,6 +50,7 @@ import type { InfoCardMode } from "@/components/annotation/AnnotationInfoCard";
 import type { AnnotationMapHandle } from "@/components/annotation/AnnotationMap";
 import { useAnnotationViewState } from "@/lib/annotation/annotationViewState";
 import { useAnnotationPageData } from "@/hooks/useAnnotationPageData";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import {
   labelMappingLabels,
   upgradeMetaInfoConfig,
@@ -128,6 +129,14 @@ export default function AnnotatePage() {
   const [keypointDraftCount, setKeypointDraftCount] = useState(0);
   const keypointDraftCountRef = useRef(keypointDraftCount);
   keypointDraftCountRef.current = keypointDraftCount;
+
+  // Warn before navigating away (prev/next, breadcrumb, back, refresh) while an
+  // annotation draft, dirty edit, or in-progress keypoint would be discarded.
+  const hasPendingWork =
+    state.type === "drafting" ||
+    (state.type === "editing" && isDirty) ||
+    keypointDraftCount > 0;
+  const leaveGuard = useUnsavedChangesGuard(hasPendingWork);
 
   // Inference modal
   const [showInferenceModal, setShowInferenceModal] = useState(false);
@@ -469,8 +478,8 @@ export default function AnnotatePage() {
       mapRef.current?.commitEdit(labelOverride);
       // handleModify will call saveEditSuccess or saveEditFailed
     } catch {
-      saveEditFailed("Failed to save");
-      toast.error("Failed to save");
+      saveEditFailed("Couldn't save your changes.");
+      toast.error("Couldn't save your changes. Please try again.");
     } finally {
       savingRef.current = false;
     }
@@ -738,44 +747,6 @@ export default function AnnotatePage() {
     }
   }, [pid, iid, deleteTargetId, select]);
 
-  // Delete from context menu (specific annotation, not necessarily selected)
-  const handleDeleteById = useCallback(
-    async (annotationId: number) => {
-      const s = stateRef.current;
-      if (s.type === "drafting") {
-        toast.error("Save or discard the pending annotation before deleting.");
-        return;
-      }
-      if (
-        s.type === "editing" &&
-        s.selectedId === annotationId &&
-        (s.dirty.geometry ||
-          s.dirty.label ||
-          s.pendingLabel !== s.originalSnapshot.label)
-      ) {
-        toast.error("Save or revert the current edit before deleting.");
-        return;
-      }
-      try {
-        await deleteAnnotation(pid, iid, annotationId);
-        setAnnotations((prev) => prev.filter((a) => a.id !== annotationId));
-
-        if (
-          (s.type === "viewing" || s.type === "editing") &&
-          s.selectedId === annotationId
-        ) {
-          select(null);
-        }
-
-        refreshOperations();
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Failed to delete";
-        toast.error(msg);
-      }
-    },
-    [pid, iid, select]
-  );
-
   // ---- Tag handlers ----
 
   const handleApplyTag = useCallback(
@@ -826,7 +797,7 @@ export default function AnnotatePage() {
         startEditingAnnotation(id);
         break;
       case 1: // Delete
-        handleDeleteById(id);
+        requestDelete(id);
         break;
     }
   }
@@ -1237,6 +1208,15 @@ export default function AnnotatePage() {
           setShowDeleteConfirm(false);
           setDeleteTargetId(null);
         }}
+      />
+
+      <ConfirmDialog
+        open={leaveGuard.blocked}
+        title="Discard unsaved annotation?"
+        message="You have an unsaved annotation. If you leave now, it will be lost."
+        confirmLabel="Leave"
+        onConfirm={leaveGuard.proceed}
+        onCancel={leaveGuard.cancel}
       />
 
       {/* Inference modal — available to all project members */}

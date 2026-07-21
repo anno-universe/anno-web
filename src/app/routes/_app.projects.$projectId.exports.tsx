@@ -11,11 +11,17 @@ import {
   PaginatedTable,
   type Column,
 } from "@/components/shared/PaginatedTable";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Spinner } from "@/components/shared/LoadingSpinner";
 import { SkeletonTable } from "@/components/shared/SkeletonTable";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
@@ -292,10 +298,14 @@ export default function ProjectExportsPage() {
       {tasksQuery.isPending ? (
         <SkeletonTable rows={4} />
       ) : !tasksQuery.isFetching && count === 0 ? (
-        <div className="rounded-md border bg-muted/30 px-4 py-12 text-center text-sm text-muted-foreground">
-          No export tasks yet. Create one to export annotations in COCO or YOLO
-          format.
-        </div>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No export tasks yet</EmptyTitle>
+            <EmptyDescription>
+              Create one to export annotations in COCO or YOLO format.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <PaginatedTable
           columns={columns}
@@ -317,74 +327,78 @@ export default function ProjectExportsPage() {
           <DialogHeader>
             <DialogTitle>New Export</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Export all active annotations across all images in this project.
-              The generated file will be available for download for 24 hours.
-            </p>
-
-            <Field>
-              <FieldLabel htmlFor="exportFormat">Format</FieldLabel>
-              <Select
-                value={format}
-                onValueChange={(v) => setFormat(v as "coco" | "yolo")}
-              >
-                <SelectTrigger id="exportFormat" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="coco">COCO JSON</SelectItem>
-                    <SelectItem value="yolo">YOLO</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </Field>
-
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <span className="text-sm font-medium">Include Images</span>
-                <p className="text-xs text-muted-foreground">
-                  Bundle original images in the export zip
-                </p>
-              </div>
-              <Switch
-                checked={includeImages}
-                onCheckedChange={setIncludeImages}
-              />
-            </div>
-
-            <Field>
-              <FieldLabel>Expiry Date</FieldLabel>
-              <DatePicker
-                date={expiresAt}
-                onDateChange={setExpiresAt}
-                placeholder="Default (24h)"
-                fromDate={new Date()}
-              />
-              <p className="text-xs text-muted-foreground">
-                If no date is selected, the export file will automatically
-                expire after 24 hours.
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreate();
+            }}
+          >
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Export all active annotations across all images in this project.
+                The generated file will be available for download for 24 hours.
               </p>
-            </Field>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowStartModal(false)}
-              disabled={starting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleCreate}
-              disabled={starting}
-            >
-              {starting ? <LoadingSpinner /> : "Start Export"}
-            </Button>
-          </DialogFooter>
+
+              <Field>
+                <FieldLabel htmlFor="exportFormat">Format</FieldLabel>
+                <Select
+                  value={format}
+                  onValueChange={(v) => setFormat(v as "coco" | "yolo")}
+                >
+                  <SelectTrigger id="exportFormat" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="coco">COCO JSON</SelectItem>
+                      <SelectItem value="yolo">YOLO</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <span className="text-sm font-medium">Include Images</span>
+                  <p className="text-xs text-muted-foreground">
+                    Bundle original images in the export zip
+                  </p>
+                </div>
+                <Switch
+                  checked={includeImages}
+                  onCheckedChange={setIncludeImages}
+                />
+              </div>
+
+              <Field>
+                <FieldLabel>Expiry Date</FieldLabel>
+                <DatePicker
+                  date={expiresAt}
+                  onDateChange={setExpiresAt}
+                  placeholder="Default (24h)"
+                  fromDate={new Date()}
+                />
+                <p className="text-xs text-muted-foreground">
+                  If no date is selected, the export file will automatically
+                  expire after 24 hours.
+                </p>
+              </Field>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowStartModal(false)}
+                disabled={starting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={starting}>
+                {starting ? <Spinner /> : "Start Export"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

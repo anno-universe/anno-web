@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { useAuthStore } from "@/stores/authStore";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Spinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -65,7 +65,7 @@ export default function LoginPage() {
           />
         </Field>
         <Button type="submit" disabled={submitting} className="w-full">
-          {submitting ? <LoadingSpinner /> : "Sign in"}
+          {submitting ? <Spinner /> : "Sign in"}
         </Button>
         <p className="text-center text-xs text-muted-foreground">
           Don&apos;t have an account?{" "}

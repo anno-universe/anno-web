@@ -14,9 +14,11 @@ import {
   TagManager,
   type TagManagerHandle,
 } from "@/components/project/TagManager";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { LoadingSpinner, Spinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { RoleNotice } from "@/components/shared/RoleNotice";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -147,7 +149,11 @@ export default function ProjectSettingsPage() {
       }
       toast.success("Project settings saved.");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to save");
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Couldn't save your changes. Please try again."
+      );
     } finally {
       setSaving(false);
     }
@@ -166,14 +172,34 @@ export default function ProjectSettingsPage() {
     }
   }
 
+  // Warn before navigating away with unsaved edits. Dirtiness is computed
+  // lazily so pending tag changes (collected imperatively via the ref) are
+  // included without a reactive TagManager subscription.
+  const isDirtyNow = () => {
+    if (deleting) return false;
+    if (name !== project.name) return true;
+    if (description !== (project.description ?? "")) return true;
+    if (JSON.stringify(metaInfo) !== JSON.stringify(project.meta_info ?? {}))
+      return true;
+    if (
+      JSON.stringify(labelMapping) !==
+      JSON.stringify(project.label_mapping ?? {})
+    )
+      return true;
+    const tagChanges = tagManagerRef.current?.collectChanges();
+    return Boolean(
+      tagChanges &&
+        (tagChanges.creates.length > 0 ||
+          tagChanges.updates.length > 0 ||
+          tagChanges.deletes.length > 0)
+    );
+  };
+
+  const leaveGuard = useUnsavedChangesGuard(isDirtyNow);
+
   return (
     <div>
-      {!isSupervisor && (
-        <div className="mb-6 rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-          Your role is worker. Settings are read-only. You can only annotate
-          images.
-        </div>
-      )}
+      {!isSupervisor && <RoleNotice area="project settings" className="mb-6" />}
 
       <form onSubmit={handleSave}>
         <FieldGroup className="gap-5">
@@ -248,7 +274,7 @@ export default function ProjectSettingsPage() {
 
           {isSupervisor && (
             <Button type="submit" disabled={saving} className="w-fit">
-              {saving ? <LoadingSpinner /> : "Save"}
+              {saving ? <Spinner /> : "Save"}
             </Button>
           )}
         </FieldGroup>
@@ -284,9 +310,18 @@ export default function ProjectSettingsPage() {
         open={showDeleteConfirm}
         title="Delete Project"
         message={`Are you sure you want to delete "${project.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        confirmLabel={deleting ? "Deleting…" : "Delete"}
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={leaveGuard.blocked}
+        title="Discard unsaved changes?"
+        message="You have unsaved changes. If you leave now, they will be lost."
+        confirmLabel="Leave"
+        onConfirm={leaveGuard.proceed}
+        onCancel={leaveGuard.cancel}
       />
     </div>
   );
