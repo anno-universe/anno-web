@@ -82,7 +82,7 @@ export function Breadcrumbs() {
     } else if (handle?.dynamicKey === "image" && match.params.imageId) {
       label = "Image";
     } else {
-      label = "...";
+      label = "…";
     }
 
     items.push({ label, path: match.pathname, isLast });

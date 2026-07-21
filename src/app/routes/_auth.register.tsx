@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { useAuthStore } from "@/stores/authStore";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Spinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -26,7 +26,9 @@ export default function RegisterPage() {
       navigate("/projects", { replace: true });
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : "Registration failed.";
+        err instanceof Error
+          ? err.message
+          : "Registration failed. Please try again.";
       setError(msg);
     } finally {
       setSubmitting(false);
@@ -75,7 +77,7 @@ export default function RegisterPage() {
           />
         </Field>
         <Button type="submit" disabled={submitting} className="w-full">
-          {submitting ? <LoadingSpinner /> : "Create account"}
+          {submitting ? <Spinner /> : "Create account"}
         </Button>
         <p className="text-center text-xs text-muted-foreground">
           Already have an account?{" "}

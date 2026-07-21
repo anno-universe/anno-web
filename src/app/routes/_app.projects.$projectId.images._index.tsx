@@ -9,6 +9,8 @@ import {
   Empty,
   EmptyHeader,
   EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
 } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -302,11 +304,23 @@ export default function ImagesPage() {
         )}
       </div>
 
-      {!imagesQuery.isFetching && count === 0 ? (
+      {!imagesQuery.isFetching && count === 0 && tagFilter.length === 0 ? (
         <Empty>
           <EmptyHeader>
             <EmptyTitle>No images yet</EmptyTitle>
+            <EmptyDescription>
+              {isSupervisor
+                ? "Upload images to start annotating."
+                : "Ask a supervisor to upload images to annotate."}
+            </EmptyDescription>
           </EmptyHeader>
+          {isSupervisor && (
+            <EmptyContent>
+              <Button asChild>
+                <Link to={`/projects/${pid}/upload`}>Upload images</Link>
+              </Button>
+            </EmptyContent>
+          )}
         </Empty>
       ) : (
         <PaginatedTable

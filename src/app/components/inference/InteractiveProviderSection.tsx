@@ -5,7 +5,7 @@ import {
   updateInteractiveProvider,
   deleteInteractiveProvider,
 } from "@/api/interactiveInference";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { LoadingSpinner, Spinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -375,7 +375,7 @@ export function InteractiveProviderSection({ projectId, isSupervisor }: Props) {
                 newResultTypes.length === 0
               }
             >
-              {creating ? <LoadingSpinner /> : "Create"}
+              {creating ? <Spinner /> : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -588,7 +588,7 @@ export function InteractiveProviderSection({ projectId, isSupervisor }: Props) {
                 editResultTypes.length === 0
               }
             >
-              {saving ? <LoadingSpinner /> : "Save"}
+              {saving ? <Spinner /> : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

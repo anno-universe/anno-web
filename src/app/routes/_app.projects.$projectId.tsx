@@ -5,6 +5,7 @@ import { getProject } from "@/api/projects";
 import { ProjectRoleBadge } from "@/components/project/ProjectRoleBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
+import { RoleNotice } from "@/components/shared/RoleNotice";
 import { useSetBreadcrumb } from "@/lib/breadcrumb";
 import { queryKeys } from "@/lib/queryKeys";
 import type { ProjectOutput } from "@/types/project";
@@ -107,12 +108,7 @@ export default function ProjectLayout() {
         </div>
       </div>
 
-      {isWorker && (
-        <div className="mb-6 rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-          You are a worker in this project. You can annotate images but cannot
-          modify project settings.
-        </div>
-      )}
+      {isWorker && <RoleNotice area="project settings" className="mb-6" />}
 
       {/* Tab navigation */}
       <div className="flex gap-2 border-b pb-2 mb-6">

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { createProject } from "@/api/projects";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Spinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -137,7 +137,7 @@ export function CreateProjectDialog({ open, onClose }: Props) {
               Cancel
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? <LoadingSpinner /> : "Create"}
+              {submitting ? <Spinner /> : "Create"}
             </Button>
           </DialogFooter>
         </form>

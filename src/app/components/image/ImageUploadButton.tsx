@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { uploadImage } from "@/api/images";
 import { normalizeError } from "@/lib/utils/errors";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Spinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/ui/button";
 
 interface Props {
@@ -45,7 +45,7 @@ export function ImageUploadButton({ projectId, onUploaded }: Props) {
       >
         {uploading ? (
           <>
-            <LoadingSpinner /> Uploading...
+            <Spinner /> Uploading…
           </>
         ) : (
           "Upload Image"

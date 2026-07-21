@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useParams, useOutletContext, useNavigate } from "react-router";
+import { toast } from "sonner";
 import { updateProject, deleteProject } from "@/api/projects";
 import {
   getProjectTags,
@@ -13,13 +14,14 @@ import {
   TagManager,
   type TagManagerHandle,
 } from "@/components/project/TagManager";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { LoadingSpinner, Spinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { RoleNotice } from "@/components/shared/RoleNotice";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Card,
   CardHeader,
@@ -39,6 +41,7 @@ import {
   type LabelMappingConfigV2,
   type MetaInfoConfigV2,
 } from "@/lib/project/configVersion";
+import { stableStringify } from "@/lib/utils/json";
 import type { ProjectUpdateInput } from "@/types/project";
 import type { TagOutput } from "@/types/tag";
 import type { ProjectContext } from "./_app.projects.$projectId";
@@ -51,7 +54,6 @@ export default function ProjectSettingsPage() {
 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -87,9 +89,18 @@ export default function ProjectSettingsPage() {
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
+  // Normalized baselines for change detection: compare the current (already
+  // upgraded) config against the upgraded stored value, so config normalization
+  // and key order never read as an edit.
+  const metaInfoBaseline = stableStringify(
+    upgradeMetaInfoConfig(project.meta_info as Record<string, unknown>)
+  );
+  const labelMappingBaseline = stableStringify(
+    upgradeLabelMappingConfig(project.label_mapping as Record<string, unknown>)
+  );
+
   async function handleSave(e: FormEvent) {
     e.preventDefault();
-    setSuccessMsg("");
     setError("");
 
     const tagChanges = tagManagerRef.current?.collectChanges();
@@ -103,20 +114,15 @@ export default function ProjectSettingsPage() {
     if (name !== project.name) patch.name = name;
     if (description !== (project.description ?? ""))
       patch.description = description || null;
-    if (
-      JSON.stringify(metaInfo) !== JSON.stringify(project.meta_info ?? {})
-    )
+    if (stableStringify(metaInfo) !== metaInfoBaseline)
       patch.meta_info = metaInfo;
-    if (
-      JSON.stringify(labelMapping) !==
-      JSON.stringify(project.label_mapping ?? {})
-    )
+    if (stableStringify(labelMapping) !== labelMappingBaseline)
       patch.label_mapping = labelMapping;
 
     const projectChanged = Object.keys(patch).length > 0;
 
     if (!projectChanged && !tagOpsPending) {
-      setSuccessMsg("No changes to save.");
+      toast.info("No changes to save.");
       return;
     }
 
@@ -147,9 +153,13 @@ export default function ProjectSettingsPage() {
           `${failureCount} save operation${failureCount === 1 ? "" : "s"} failed. The latest server state has been reloaded.`
         );
       }
-      setSuccessMsg("Saved.");
+      toast.success("Project settings saved.");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save");
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Couldn't save your changes. Please try again."
+      );
     } finally {
       setSaving(false);
     }
@@ -168,23 +178,33 @@ export default function ProjectSettingsPage() {
     }
   }
 
+  // Warn before navigating away with unsaved edits. Dirtiness is computed
+  // lazily so pending tag changes (collected imperatively via the ref) are
+  // included without a reactive TagManager subscription.
+  const isDirtyNow = () => {
+    if (deleting) return false;
+    if (name !== project.name) return true;
+    if (description !== (project.description ?? "")) return true;
+    if (stableStringify(metaInfo) !== metaInfoBaseline) return true;
+    if (stableStringify(labelMapping) !== labelMappingBaseline) return true;
+    const tagChanges = tagManagerRef.current?.collectChanges();
+    return Boolean(
+      tagChanges &&
+        (tagChanges.creates.length > 0 ||
+          tagChanges.updates.length > 0 ||
+          tagChanges.deletes.length > 0)
+    );
+  };
+
+  const leaveGuard = useUnsavedChangesGuard(isDirtyNow);
+
   return (
     <div>
-      {!isSupervisor && (
-        <div className="mb-6 rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-          Your role is worker. Settings are read-only. You can only annotate
-          images.
-        </div>
-      )}
+      {!isSupervisor && <RoleNotice area="project settings" className="mb-6" />}
 
       <form onSubmit={handleSave}>
         <FieldGroup className="gap-5">
           {error && <ErrorAlert message={error} />}
-          {successMsg && (
-            <Alert>
-              <AlertDescription>{successMsg}</AlertDescription>
-            </Alert>
-          )}
 
           <Field>
             <FieldLabel htmlFor="sname">Name</FieldLabel>
@@ -255,7 +275,7 @@ export default function ProjectSettingsPage() {
 
           {isSupervisor && (
             <Button type="submit" disabled={saving} className="w-fit">
-              {saving ? <LoadingSpinner /> : "Save"}
+              {saving ? <Spinner /> : "Save"}
             </Button>
           )}
         </FieldGroup>
@@ -291,9 +311,18 @@ export default function ProjectSettingsPage() {
         open={showDeleteConfirm}
         title="Delete Project"
         message={`Are you sure you want to delete "${project.name}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        confirmLabel={deleting ? "Deleting…" : "Delete"}
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={leaveGuard.blocked}
+        title="Discard unsaved changes?"
+        message="You have unsaved changes. If you leave now, they will be lost."
+        confirmLabel="Leave"
+        onConfirm={leaveGuard.proceed}
+        onCancel={leaveGuard.cancel}
       />
     </div>
   );

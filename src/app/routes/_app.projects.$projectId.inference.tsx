@@ -12,11 +12,18 @@ import {
   PaginatedTable,
   type Column,
 } from "@/components/shared/PaginatedTable";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { LoadingSpinner, Spinner } from "@/components/shared/LoadingSpinner";
 import { SkeletonTable } from "@/components/shared/SkeletonTable";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
+import { RoleNotice } from "@/components/shared/RoleNotice";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
   Select,
@@ -116,12 +123,7 @@ export default function ProjectInferencePage() {
   );
 
   if (!isSupervisor) {
-    return (
-      <div className="rounded-md border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-        Your role is {project.my_role ?? "none"}. Inference run management is
-        only available to supervisors.
-      </div>
-    );
+    return <RoleNotice area="inference runs" />;
   }
 
   // ---- Page change ----
@@ -338,10 +340,14 @@ export default function ProjectInferencePage() {
       {runsQuery.isPending ? (
         <SkeletonTable rows={4} />
       ) : !runsQuery.isFetching && count === 0 ? (
-        <div className="rounded-md border bg-muted/30 px-4 py-12 text-center text-sm text-muted-foreground">
-          No inference runs yet. Start one to auto-annotate all images in this
-          project.
-        </div>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No inference runs yet</EmptyTitle>
+            <EmptyDescription>
+              Start one to auto-annotate all images in this project.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <PaginatedTable
           columns={columns}
@@ -364,62 +370,69 @@ export default function ProjectInferencePage() {
           <DialogHeader>
             <DialogTitle>Start Inference Run</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              This will run the selected provider against ALL images currently in
-              this project. To target a subset, create a separate project.
-            </p>
-            <Field>
-              <FieldLabel htmlFor="inferProvider">Provider</FieldLabel>
-              {providersQuery.isPending ? (
-                <LoadingSpinner />
-              ) : (
-                <Select
-                  value={
-                    selectedProviderId != null
-                      ? String(selectedProviderId)
-                      : undefined
-                  }
-                  onValueChange={(v) =>
-                    setSelectedProviderId(v ? Number(v) : null)
-                  }
-                >
-                  <SelectTrigger id="inferProvider" className="w-full">
-                    <SelectValue placeholder="Select a provider…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {providers
-                        .filter((p) => p.is_active)
-                        .map((p) => (
-                          <SelectItem key={p.id} value={String(p.id)}>
-                            {p.name}
-                            {p.is_global ? " (Global)" : ""}
-                          </SelectItem>
-                        ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              )}
-            </Field>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowStartModal(false)}
-              disabled={starting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleStart}
-              disabled={starting || !selectedProviderId}
-            >
-              {starting ? <LoadingSpinner /> : "Start"}
-            </Button>
-          </DialogFooter>
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleStart();
+            }}
+          >
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                This will run the selected provider against all images currently
+                in this project. To target a subset, create a separate project.
+              </p>
+              <Field>
+                <FieldLabel htmlFor="inferProvider">Provider</FieldLabel>
+                {providersQuery.isPending ? (
+                  <LoadingSpinner />
+                ) : (
+                  <Select
+                    value={
+                      selectedProviderId != null
+                        ? String(selectedProviderId)
+                        : undefined
+                    }
+                    onValueChange={(v) =>
+                      setSelectedProviderId(v ? Number(v) : null)
+                    }
+                  >
+                    <SelectTrigger id="inferProvider" className="w-full">
+                      <SelectValue placeholder="Select a provider…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {providers
+                          .filter((p) => p.is_active)
+                          .map((p) => (
+                            <SelectItem key={p.id} value={String(p.id)}>
+                              {p.name}
+                              {p.is_global ? " (Global)" : ""}
+                            </SelectItem>
+                          ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                )}
+              </Field>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowStartModal(false)}
+                disabled={starting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={starting || !selectedProviderId}
+              >
+                {starting ? <Spinner /> : "Start"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
