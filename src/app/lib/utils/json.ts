@@ -17,3 +17,26 @@ export function prettyJson(obj: unknown): string {
     return String(obj);
   }
 }
+
+/**
+ * Deterministic JSON.stringify with recursively sorted object keys, so two
+ * structurally-equal values serialize identically regardless of key order
+ * (e.g. after a JSONB round-trip). Use for change detection, not for payloads.
+ */
+export function stableStringify(value: unknown): string {
+  return JSON.stringify(sortKeysDeep(value));
+}
+
+function sortKeysDeep(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeysDeep);
+  if (value && typeof value === "object") {
+    const source = value as Record<string, unknown>;
+    return Object.keys(source)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, key) => {
+        acc[key] = sortKeysDeep(source[key]);
+        return acc;
+      }, {});
+  }
+  return value;
+}

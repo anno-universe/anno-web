@@ -41,6 +41,7 @@ import {
   type LabelMappingConfigV2,
   type MetaInfoConfigV2,
 } from "@/lib/project/configVersion";
+import { stableStringify } from "@/lib/utils/json";
 import type { ProjectUpdateInput } from "@/types/project";
 import type { TagOutput } from "@/types/tag";
 import type { ProjectContext } from "./_app.projects.$projectId";
@@ -88,6 +89,16 @@ export default function ProjectSettingsPage() {
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
 
+  // Normalized baselines for change detection: compare the current (already
+  // upgraded) config against the upgraded stored value, so config normalization
+  // and key order never read as an edit.
+  const metaInfoBaseline = stableStringify(
+    upgradeMetaInfoConfig(project.meta_info as Record<string, unknown>)
+  );
+  const labelMappingBaseline = stableStringify(
+    upgradeLabelMappingConfig(project.label_mapping as Record<string, unknown>)
+  );
+
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -103,14 +114,9 @@ export default function ProjectSettingsPage() {
     if (name !== project.name) patch.name = name;
     if (description !== (project.description ?? ""))
       patch.description = description || null;
-    if (
-      JSON.stringify(metaInfo) !== JSON.stringify(project.meta_info ?? {})
-    )
+    if (stableStringify(metaInfo) !== metaInfoBaseline)
       patch.meta_info = metaInfo;
-    if (
-      JSON.stringify(labelMapping) !==
-      JSON.stringify(project.label_mapping ?? {})
-    )
+    if (stableStringify(labelMapping) !== labelMappingBaseline)
       patch.label_mapping = labelMapping;
 
     const projectChanged = Object.keys(patch).length > 0;
@@ -179,13 +185,8 @@ export default function ProjectSettingsPage() {
     if (deleting) return false;
     if (name !== project.name) return true;
     if (description !== (project.description ?? "")) return true;
-    if (JSON.stringify(metaInfo) !== JSON.stringify(project.meta_info ?? {}))
-      return true;
-    if (
-      JSON.stringify(labelMapping) !==
-      JSON.stringify(project.label_mapping ?? {})
-    )
-      return true;
+    if (stableStringify(metaInfo) !== metaInfoBaseline) return true;
+    if (stableStringify(labelMapping) !== labelMappingBaseline) return true;
     const tagChanges = tagManagerRef.current?.collectChanges();
     return Boolean(
       tagChanges &&
