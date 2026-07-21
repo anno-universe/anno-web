@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useParams, useOutletContext, useNavigate } from "react-router";
+import { toast } from "sonner";
 import { updateProject, deleteProject } from "@/api/projects";
 import {
   getProjectTags,
@@ -19,7 +20,6 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Card,
   CardHeader,
@@ -51,7 +51,6 @@ export default function ProjectSettingsPage() {
 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -89,7 +88,6 @@ export default function ProjectSettingsPage() {
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
-    setSuccessMsg("");
     setError("");
 
     const tagChanges = tagManagerRef.current?.collectChanges();
@@ -116,7 +114,7 @@ export default function ProjectSettingsPage() {
     const projectChanged = Object.keys(patch).length > 0;
 
     if (!projectChanged && !tagOpsPending) {
-      setSuccessMsg("No changes to save.");
+      toast.info("No changes to save.");
       return;
     }
 
@@ -147,9 +145,9 @@ export default function ProjectSettingsPage() {
           `${failureCount} save operation${failureCount === 1 ? "" : "s"} failed. The latest server state has been reloaded.`
         );
       }
-      setSuccessMsg("Saved.");
+      toast.success("Project settings saved.");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save");
+      toast.error(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setSaving(false);
     }
@@ -180,11 +178,6 @@ export default function ProjectSettingsPage() {
       <form onSubmit={handleSave}>
         <FieldGroup className="gap-5">
           {error && <ErrorAlert message={error} />}
-          {successMsg && (
-            <Alert>
-              <AlertDescription>{successMsg}</AlertDescription>
-            </Alert>
-          )}
 
           <Field>
             <FieldLabel htmlFor="sname">Name</FieldLabel>
