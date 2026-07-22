@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  ChevronDown,
   Pencil,
   Plus,
   RotateCcw,
@@ -445,105 +446,127 @@ function SupercategorySchemaEditor({
   onUseInherited: (labelName: string) => void;
 }) {
   const [expandedLabel, setExpandedLabel] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const customCount = labels.filter(
+    ([, entry]) => (entry.keypoints?.length ?? 0) > 0,
+  ).length;
 
   return (
-    <section className="flex flex-col gap-4 rounded-md border p-4">
-      <div>
-        <p className="font-medium">Parent category: {name}</p>
-        <p className="text-xs text-muted-foreground">
-          Default template for {labels.length}{" "}
-          {labels.length === 1 ? "category" : "categories"}.
-        </p>
-      </div>
+    <Collapsible open={open} onOpenChange={setOpen} className="rounded-md border">
+      <CollapsibleTrigger asChild>
+        <button className="flex w-full items-center gap-3 p-4 text-left hover:bg-muted/50 transition-colors">
+          <ChevronDown
+            className="size-4 shrink-0 text-muted-foreground transition-transform"
+            style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)" }}
+          />
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <span className="truncate font-medium">Parent: {name}</span>
+            <Badge variant="outline" className="text-xs">
+              {keypoints.length} {keypoints.length === 1 ? "point" : "points"}
+            </Badge>
+            <Badge variant="outline" className="text-xs">
+              {labels.length} {labels.length === 1 ? "category" : "categories"}
+            </Badge>
+            {customCount > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {customCount} custom
+              </Badge>
+            )}
+          </div>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="flex flex-col gap-4 px-4 pb-4">
+          <TemplateEditor
+            keypoints={keypoints}
+            onChange={onSupercategoryChange}
+          />
 
-      <TemplateEditor
-        keypoints={keypoints}
-        onChange={onSupercategoryChange}
-      />
+          <Separator />
 
-      <Separator />
+          <div className="flex flex-col gap-2">
+            <div>
+              <p className="text-sm font-medium">Categories</p>
+              <p className="text-xs text-muted-foreground">
+                Each category inherits the template above until you give it its own.
+              </p>
+            </div>
 
-      <div className="flex flex-col gap-2">
-        <div>
-          <p className="text-sm font-medium">Categories</p>
-          <p className="text-xs text-muted-foreground">
-            Each category inherits the template above until you give it its own.
-          </p>
-        </div>
+            {labels.map(([labelName, entry]) => {
+              const hasOverride = (entry.keypoints?.length ?? 0) > 0;
+              const effectiveKeypoints = hasOverride ? entry.keypoints! : keypoints;
+              const isOpen = expandedLabel === labelName;
 
-        {labels.map(([labelName, entry]) => {
-          const hasOverride = (entry.keypoints?.length ?? 0) > 0;
-          const effectiveKeypoints = hasOverride ? entry.keypoints! : keypoints;
-          const isOpen = expandedLabel === labelName;
-
-          return (
-            <Collapsible
-              key={entry.id}
-              open={isOpen}
-              onOpenChange={(open) => setExpandedLabel(open ? labelName : null)}
-              className="rounded-md border"
-            >
-              <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span
-                    className="size-3 shrink-0 rounded-full border"
-                    style={{ backgroundColor: entry.color }}
-                    aria-hidden="true"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {entry.id} - {labelName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {effectiveKeypoints.length} {effectiveKeypoints.length === 1 ? "point" : "points"}
-                    </p>
+              return (
+                <Collapsible
+                  key={entry.id}
+                  open={isOpen}
+                  onOpenChange={(open) => setExpandedLabel(open ? labelName : null)}
+                  className="rounded-md border"
+                >
+                  <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="size-3 shrink-0 rounded-full border"
+                        style={{ backgroundColor: entry.color }}
+                        aria-hidden="true"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {entry.id} - {labelName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {effectiveKeypoints.length} {effectiveKeypoints.length === 1 ? "point" : "points"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
+                      <Badge variant={hasOverride ? "secondary" : "outline"}>
+                        {hasOverride ? "Custom template" : "Inherited"}
+                      </Badge>
+                      {hasOverride && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            onUseInherited(labelName);
+                            setExpandedLabel(null);
+                          }}
+                        >
+                          <RotateCcw data-icon="inline-start" />
+                          Use inherited
+                        </Button>
+                      )}
+                      <CollapsibleTrigger asChild>
+                        <Button type="button" variant="outline" size="sm">
+                          <Pencil data-icon="inline-start" />
+                          {isOpen ? "Close" : hasOverride ? "Edit" : "Configure"}
+                        </Button>
+                      </CollapsibleTrigger>
+                    </div>
                   </div>
-                </div>
-                <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
-                  <Badge variant={hasOverride ? "secondary" : "outline"}>
-                    {hasOverride ? "Custom template" : "Inherited"}
-                  </Badge>
-                  {hasOverride && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        onUseInherited(labelName);
-                        setExpandedLabel(null);
-                      }}
-                    >
-                      <RotateCcw data-icon="inline-start" />
-                      Use inherited
-                    </Button>
-                  )}
-                  <CollapsibleTrigger asChild>
-                    <Button type="button" variant="outline" size="sm">
-                      <Pencil data-icon="inline-start" />
-                      {isOpen ? "Close" : hasOverride ? "Edit" : "Configure"}
-                    </Button>
-                  </CollapsibleTrigger>
-                </div>
-              </div>
-              <CollapsibleContent>
-                <div className="px-3 pb-3">
-                  <TemplateEditor
-                    keypoints={effectiveKeypoints}
-                    onChange={(nextKeypoints) => onLabelChange(labelName, nextKeypoints)}
-                  />
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          );
-        })}
+                  <CollapsibleContent>
+                    <div className="px-3 pb-3">
+                      <TemplateEditor
+                        keypoints={effectiveKeypoints}
+                        onChange={(nextKeypoints) => onLabelChange(labelName, nextKeypoints)}
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
 
-        {labels.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No categories use this parent category.
-          </p>
-        )}
-      </div>
-    </section>
+            {labels.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No categories use this parent category.
+              </p>
+            )}
+          </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
