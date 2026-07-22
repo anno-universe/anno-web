@@ -1,6 +1,7 @@
 import { Eye, EyeOff, RotateCcw, Save, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/shared/LoadingSpinner";
 import {
   Card,
   CardContent,
@@ -33,7 +34,6 @@ export interface KeypointSession {
   names: string[];
   schemaKey: string;
   points: KeypointTuple[];
-  placementVisibility: 1 | 2;
   saving: boolean;
 }
 
@@ -41,26 +41,68 @@ interface Props {
   schemas: KeypointSchemaOption[];
   session: KeypointSession | null;
   onSelectSchema: (schema: KeypointSchemaOption) => void;
-  onPlacementVisibilityChange: (visibility: 1 | 2) => void;
-  onMarkAbsent: () => void;
+  onTogglePointVisibility: (index: number) => void;
+  onMarkCurrentAbsent: () => void;
   onUndo: () => void;
   onCancel: () => void;
   onSave: () => void;
 }
 
-function visibilityLabel(visibility: KeypointVisibility | undefined) {
-  if (visibility === 2) return "Visible";
-  if (visibility === 1) return "Occluded";
-  if (visibility === 0) return "Absent";
-  return "Pending";
+function VisibilityToggle({
+  visibility,
+  onClick,
+}: {
+  visibility: KeypointVisibility | undefined;
+  onClick: () => void;
+}) {
+  if (visibility === 2) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="rounded p-0.5 text-blue-600 transition-colors hover:bg-blue-50"
+        aria-label="Toggle to occluded"
+        title="Visible — click to toggle"
+      >
+        <Eye className="size-4" />
+      </button>
+    );
+  }
+  if (visibility === 1) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="rounded p-0.5 text-amber-600 transition-colors hover:bg-amber-50"
+        aria-label="Toggle to absent"
+        title="Occluded — click to toggle"
+      >
+        <EyeOff className="size-4" />
+      </button>
+    );
+  }
+  if (visibility === 0) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="rounded p-0.5 text-gray-400 opacity-50 transition-colors hover:bg-gray-50 hover:opacity-75"
+        aria-label="Toggle to visible"
+        title="Absent — click to toggle"
+      >
+        <EyeOff className="size-4" />
+      </button>
+    );
+  }
+  return null;
 }
 
 export function KeypointWorkflowPanel({
   schemas,
   session,
   onSelectSchema,
-  onPlacementVisibilityChange,
-  onMarkAbsent,
+  onTogglePointVisibility,
+  onMarkCurrentAbsent,
   onUndo,
   onCancel,
   onSave,
@@ -106,7 +148,8 @@ export function KeypointWorkflowPanel({
   }
 
   const complete = session.points.length === session.names.length;
-  const currentName = session.names[session.points.length];
+  const currentIndex = session.points.length;
+  const currentName = session.names[currentIndex];
   const percent = Math.round((session.points.length / session.names.length) * 100);
 
   return (
@@ -120,46 +163,53 @@ export function KeypointWorkflowPanel({
         </CardDescription>
         <Progress value={percent} />
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-col gap-3 overflow-auto">
-        {!complete && (
-          <div className="flex items-center gap-2">
-            <Select
-              value={String(session.placementVisibility)}
-              onValueChange={(value) =>
-                onPlacementVisibilityChange(Number(value) as 1 | 2)
-              }
-            >
-              <SelectTrigger className="min-w-0 flex-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="2"><Eye /> Visible click</SelectItem>
-                  <SelectItem value="1"><EyeOff /> Occluded click</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <Button type="button" variant="outline" onClick={onMarkAbsent}>
-              Mark absent
-            </Button>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-1">
+      <CardContent className="flex min-h-0 flex-col gap-1 overflow-auto">
+        <div className="flex flex-col">
           {session.names.map((name, index) => {
-            const visibility = session.points[index]?.[2];
+            const point = session.points[index];
+            const isCurrent = index === currentIndex && !complete;
+
             return (
               <div
                 key={`${index}-${name}`}
-                className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm"
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+                  isCurrent && "border-l-[3px] border-blue-300 bg-blue-50"
+                )}
               >
-                <span className="truncate">
-                  <span className="mr-2 tabular-nums text-muted-foreground">{index}</span>
+                <span
+                  className={cn(
+                    "mr-1 min-w-[2ch] tabular-nums text-muted-foreground",
+                    isCurrent && "font-bold text-blue-600"
+                  )}
+                >
+                  {index}
+                </span>
+                <span
+                  className={cn(
+                    "flex-1 truncate",
+                    isCurrent && "font-semibold",
+                    point && point[2] === 0 && "line-through text-muted-foreground"
+                  )}
+                >
                   {name}
                 </span>
-                <Badge variant={visibility == null ? "outline" : "secondary"}>
-                  {visibilityLabel(visibility)}
-                </Badge>
+                {point ? (
+                  <VisibilityToggle
+                    visibility={point[2] as KeypointVisibility}
+                    onClick={() => onTogglePointVisibility(index)}
+                  />
+                ) : isCurrent ? (
+                  <button
+                    type="button"
+                    onClick={onMarkCurrentAbsent}
+                    className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    aria-label="Mark absent"
+                    title="Mark absent — skip this point"
+                  >
+                    <EyeOff className="size-3.5" />
+                  </button>
+                ) : null}
               </div>
             );
           })}
@@ -189,7 +239,11 @@ export function KeypointWorkflowPanel({
           </Button>
         </div>
         <Button type="button" onClick={onSave} disabled={!complete || session.saving}>
-          <Save data-icon="inline-start" />
+          {session.saving ? (
+            <Spinner />
+          ) : (
+            <Save data-icon="inline-start" />
+          )}
           {session.saving ? "Saving…" : "Complete and save"}
         </Button>
       </CardFooter>
