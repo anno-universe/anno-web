@@ -30,6 +30,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { AnnotationTopToolBar } from "@/components/annotation/AnnotationTopToolBar";
+import {
+  KeypointWorkflowPanel,
+  type KeypointSchemaOption,
+  type KeypointSession,
+} from "@/components/annotation/KeypointWorkflowPanel";
 import { InferenceModal } from "@/components/inference/InferenceModal";
 import { InteractiveInferenceModal } from "@/components/inference/InteractiveInferenceModal";
 import { InteractiveToolbar } from "@/components/inference/InteractiveToolbar";
@@ -54,14 +59,18 @@ import { useAnnotationViewState } from "@/lib/annotation/annotationViewState";
 import { useAnnotationPageData } from "@/hooks/useAnnotationPageData";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import {
-  labelMappingLabels,
+  upgradeLabelMappingConfig,
   upgradeMetaInfoConfig,
 } from "@/lib/project/configVersion";
-import { labelOptionsFromMapping } from "@/lib/utils/labelMapping";
+import {
+  keypointSchemasFromConfig,
+  labelOptionsFromMapping,
+} from "@/lib/utils/labelMapping";
 import { useSetBreadcrumb } from "@/lib/breadcrumb";
 import type {
   Annotation2DOutput,
   Annotation2DCreateInput,
+  KeypointTuple,
 } from "@/types/annotation";
 import type { Image2DOutput } from "@/types/image";
 import type { ToolType } from "@/components/annotation/StatusBar";
@@ -128,10 +137,14 @@ export default function AnnotatePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
 
-  // Keypoint draft count (separate from annotation state — draw interaction)
-  const [keypointDraftCount, setKeypointDraftCount] = useState(0);
+  // Schema-driven keypoint workflow. The canvas only reports clicks; this
+  // session owns ordered points, visibility, review, and persistence.
+  const [keypointSession, setKeypointSession] = useState<KeypointSession | null>(null);
+  const keypointDraftCount = keypointSession?.points.length ?? 0;
   const keypointDraftCountRef = useRef(keypointDraftCount);
   keypointDraftCountRef.current = keypointDraftCount;
+  const keypointSessionRef = useRef(keypointSession);
+  keypointSessionRef.current = keypointSession;
 
   // Warn before navigating away (prev/next, breadcrumb, back, refresh) while an
   // annotation draft, dirty edit, or in-progress keypoint would be discarded.
@@ -455,6 +468,9 @@ export default function AnnotatePage() {
       if (interactiveStateRef.current.type !== "idle") return; // blocked during SAM
       if (blockPendingWork()) return;
       setActiveTool(tool);
+      if (activeTool === "draw-point" && tool !== "draw-point") {
+        setKeypointSession(null);
+      }
       // Leaving select mode: if editing, cancel it
       if (tool !== "select" && stateRef.current.type === "editing") {
         mapRef.current?.cancelEdit();
@@ -547,6 +563,7 @@ export default function AnnotatePage() {
   useEffect(() => {
     mapRef.current?.cancelEdit();
     mapRef.current?.clearDraft();
+    setKeypointSession(null);
     const s = stateRef.current;
     if (s.type === "drafting") discardDraftDispatch();
     if (s.type === "editing") cancelEditDispatch();
@@ -648,6 +665,57 @@ export default function AnnotatePage() {
     mapRef.current?.clearDraft();
     discardDraftDispatch();
   }, [discardDraftDispatch]);
+
+  const handleKeypointPoint = useCallback((x: number, y: number) => {
+    setKeypointSession((current) => {
+      if (!current || current.saving || current.points.length >= current.names.length) {
+        return current;
+      }
+      const point: KeypointTuple = [x, y, current.placementVisibility];
+      return { ...current, points: [...current.points, point] };
+    });
+  }, []);
+
+  const handleKeypointAbsent = useCallback(() => {
+    setKeypointSession((current) => {
+      if (!current || current.saving || current.points.length >= current.names.length) {
+        return current;
+      }
+      return { ...current, points: [...current.points, [0, 0, 0]] };
+    });
+  }, []);
+
+  const handleKeypointUndo = useCallback(() => {
+    setKeypointSession((current) =>
+      current && !current.saving
+        ? { ...current, points: current.points.slice(0, -1) }
+        : current
+    );
+  }, []);
+
+  const handleKeypointCancel = useCallback(() => {
+    setKeypointSession(null);
+    setActiveTool("select");
+  }, []);
+
+  const handleKeypointSave = useCallback(async () => {
+    const current = keypointSessionRef.current;
+    if (!current || current.points.length !== current.names.length || current.saving) return;
+    setKeypointSession({ ...current, saving: true });
+    const created = await commitCreate({
+      annotation_type: "keypoint",
+      label: current.label,
+      box: null,
+      polygon: null,
+      keypoint: { points: current.points },
+    });
+    if (!created) {
+      setKeypointSession((session) => session ? { ...session, saving: false } : session);
+      return;
+    }
+    setKeypointSession(null);
+    setActiveTool("select");
+  }, [commitCreate]);
 
   // Modify handler — called by AnnotationMap.commitEdit
   const handleModify = useCallback(
@@ -809,10 +877,17 @@ export default function AnnotatePage() {
     }
   }
 
+  const labelMappingConfig = upgradeLabelMappingConfig(
+    project?.label_mapping as Record<string, unknown>
+  );
+  const labelMapping = labelMappingConfig.labels;
+  const labelOptions = labelOptionsFromMapping(labelMapping);
+  const keypointSchemas = keypointSchemasFromConfig(labelMappingConfig);
   const metaInfo = upgradeMetaInfoConfig(
     project?.meta_info as Record<string, unknown>
   );
-  const keypointEnabled = metaInfo.keypoint_enabled === true;
+  const keypointEnabled =
+    metaInfo.keypoint_enabled === true && keypointSchemas.length > 0;
   const boxRotationEnabled = metaInfo.box_rotation_enabled === true;
 
   // ---- Keyboard shortcuts ----
@@ -860,8 +935,11 @@ export default function AnnotatePage() {
             } else if (ist.type === "prompting" && ist.prompts.length > 0) {
               handleSamSend();
             }
-          } else if (activeTool === "draw-point" && keypointDraftCount > 0) {
-            mapRef.current?.finishKeypointGroup();
+          } else if (
+            activeTool === "draw-point" &&
+            keypointSession?.points.length === keypointSession?.names.length
+          ) {
+            handleKeypointSave();
           } else if (s.type === "drafting" && !s.saving) {
             handleSaveDraft();
           } else if (s.type === "editing" && !s.saving) {
@@ -874,8 +952,8 @@ export default function AnnotatePage() {
             break;
           }
           setCtxMenu(null);
-          if (activeTool === "draw-point" && keypointDraftCount > 0) {
-            mapRef.current?.cancelKeypointGroup();
+          if (activeTool === "draw-point" && keypointSession) {
+            handleKeypointCancel();
           } else if (s.type === "editing" && !savingRef.current) {
             handleRevertEdit();
           } else if (s.type === "drafting" && !savingRef.current) {
@@ -912,14 +990,12 @@ export default function AnnotatePage() {
     handleSamSend,
     handleSamCommit,
     handleSamDiscard,
+    keypointSession,
+    handleKeypointSave,
+    handleKeypointCancel,
   ]);
 
   // ---- Derived values ----
-  const labelMapping = labelMappingLabels(
-    project?.label_mapping as Record<string, unknown>
-  );
-  const labelOptions = labelOptionsFromMapping(labelMapping);
-
   // Unique labels used across all annotations on this image (for dropdown when no mapping).
   const usedLabels = useMemo(() => {
     const set = new Set<number>();
@@ -1038,12 +1114,7 @@ export default function AnnotatePage() {
           onZoomOut={() => mapRef.current?.zoomOut()}
           onFitView={() => mapRef.current?.fitView()}
           onZoom100={() => mapRef.current?.zoom100()}
-          keypointDrafting={
-            activeTool === "draw-point" && keypointDraftCount > 0
-          }
-          draftCount={keypointDraftCount}
-          onFinishKeypoint={() => mapRef.current?.finishKeypointGroup()}
-          onCancelKeypoint={() => mapRef.current?.cancelKeypointGroup()}
+          keypointDrafting={false}
           keypointEnabled={keypointEnabled}
           onOpenInference={
             project?.my_role != null
@@ -1107,7 +1178,18 @@ export default function AnnotatePage() {
               setGeometryClean();
             }
           }}
-          onKeypointDraftChange={setKeypointDraftCount}
+          keypointDraft={
+            keypointSession
+              ? {
+                  names: keypointSession.names,
+                  points: keypointSession.points,
+                  edges: metaInfo.keypoint_edges?.[keypointSession.schemaKey] ?? [],
+                }
+              : null
+          }
+          onKeypointPoint={handleKeypointPoint}
+          keypointSchemas={keypointSchemas}
+          keypointEdges={metaInfo.keypoint_edges ?? {}}
           boxRotationEnabled={boxRotationEnabled}
           onSamPoint={handleSamPoint}
           onSamBox={handleSamBox}
@@ -1115,6 +1197,33 @@ export default function AnnotatePage() {
           samPointNegative={samTool === "negative_point"}
           hasSamCandidate={interactiveState.type === "reviewing"}
         />
+
+        {activeTool === "draw-point" && (
+          <KeypointWorkflowPanel
+            schemas={keypointSchemas as KeypointSchemaOption[]}
+            session={keypointSession}
+            onSelectSchema={(schema) =>
+              setKeypointSession({
+                label: schema.label,
+                name: schema.name,
+                names: schema.keypoints,
+                schemaKey: schema.schemaKey,
+                points: [],
+                placementVisibility: 2,
+                saving: false,
+              })
+            }
+            onPlacementVisibilityChange={(placementVisibility) =>
+              setKeypointSession((current) =>
+                current ? { ...current, placementVisibility } : current
+              )
+            }
+            onMarkAbsent={handleKeypointAbsent}
+            onUndo={handleKeypointUndo}
+            onCancel={handleKeypointCancel}
+            onSave={handleKeypointSave}
+          />
+        )}
 
         {/* Floating info card — portalled into the OL overlay. Mode-driven:
             draft = label picker, edit = commit surface, view = read-only. */}

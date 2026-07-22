@@ -40,11 +40,12 @@ export function CreateProjectDialog({ open, onClose }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [metaInfo, setMetaInfo] = useState<MetaInfoConfigV2>({
-    version: 2,
+    version: 3,
   });
   const [labelMapping, setLabelMapping] = useState<LabelMappingConfigV2>({
-    version: 2,
+    version: 3,
     labels: {},
+    supercategories: {},
   });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -122,8 +123,9 @@ export function CreateProjectDialog({ open, onClose }: Props) {
               </FieldDescription>
               <LabelMappingEditor
                 value={labelMapping.labels}
-                onChange={(labels) =>
-                  setLabelMapping({ version: 2, labels })
+                supercategories={labelMapping.supercategories}
+                onChange={(labels, supercategories) =>
+                  setLabelMapping({ version: 3, labels, supercategories })
                 }
               />
             </Field>
@@ -133,7 +135,11 @@ export function CreateProjectDialog({ open, onClose }: Props) {
               <FieldDescription>
                 Configure which tools and options are available to annotators.
               </FieldDescription>
-              <AnnotationSettings value={metaInfo} onChange={setMetaInfo} />
+              <AnnotationSettings
+                value={metaInfo}
+                onChange={setMetaInfo}
+                keypointConfigurationAvailable={false}
+              />
             </Field>
           </FieldGroup>
 

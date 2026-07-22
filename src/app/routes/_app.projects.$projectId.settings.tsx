@@ -3,18 +3,14 @@ import { useParams, useOutletContext, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { updateProject, deleteProject } from "@/api/projects";
-import {
-  getProjectTags,
-  createTag,
-  updateTag,
-  deleteTag,
-} from "@/api/tags";
+import { getProjectTags, createTag, updateTag, deleteTag } from "@/api/tags";
 import { LabelMappingEditor } from "@/components/project/LabelMappingEditor";
 import { AnnotationSettings } from "@/components/project/AnnotationSettings";
 import {
   TagManager,
   type TagManagerHandle,
 } from "@/components/project/TagManager";
+import { SettingsSection } from "@/components/project/SettingsSection";
 import { LoadingSpinner, Spinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
@@ -30,12 +26,7 @@ import {
   CardDescription,
   CardFooter,
 } from "@/components/ui/card";
-import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-  FieldDescription,
-} from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
   upgradeLabelMappingConfig,
   upgradeMetaInfoConfig,
@@ -64,16 +55,17 @@ export default function ProjectSettingsPage() {
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? "");
   const [metaInfo, setMetaInfo] = useState<MetaInfoConfigV2>(
-    upgradeMetaInfoConfig(project.meta_info as Record<string, unknown>)
+    upgradeMetaInfoConfig(project.meta_info as Record<string, unknown>),
   );
   const [labelMapping, setLabelMapping] = useState<LabelMappingConfigV2>(
-    upgradeLabelMappingConfig(project.label_mapping as Record<string, unknown>)
+    upgradeLabelMappingConfig(project.label_mapping as Record<string, unknown>),
   );
 
   // Tag state — fetched separately (tags are independent REST resources)
   const tagManagerRef = useRef<TagManagerHandle>(null);
   const [projectTags, setProjectTags] = useState<TagOutput[]>([]);
   const [loadingTags, setLoadingTags] = useState(true);
+  const [tagsDirty, setTagsDirty] = useState(false);
 
   async function loadTags() {
     try {
@@ -96,11 +88,17 @@ export default function ProjectSettingsPage() {
   // upgraded) config against the upgraded stored value, so config normalization
   // and key order never read as an edit.
   const metaInfoBaseline = stableStringify(
-    upgradeMetaInfoConfig(project.meta_info as Record<string, unknown>)
+    upgradeMetaInfoConfig(project.meta_info as Record<string, unknown>),
   );
   const labelMappingBaseline = stableStringify(
-    upgradeLabelMappingConfig(project.label_mapping as Record<string, unknown>)
+    upgradeLabelMappingConfig(project.label_mapping as Record<string, unknown>),
   );
+  const projectDirty =
+    name !== project.name ||
+    description !== (project.description ?? "") ||
+    stableStringify(metaInfo) !== metaInfoBaseline ||
+    stableStringify(labelMapping) !== labelMappingBaseline;
+  const isDirty = projectDirty || tagsDirty;
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
@@ -140,7 +138,7 @@ export default function ProjectSettingsPage() {
         operations.push(
           ...tagChanges.creates.map((c) => createTag(id, c)),
           ...tagChanges.updates.map((u) => updateTag(id, u.id, u.patch)),
-          ...tagChanges.deletes.map((d) => deleteTag(id, d))
+          ...tagChanges.deletes.map((d) => deleteTag(id, d)),
         );
       }
 
@@ -157,11 +155,11 @@ export default function ProjectSettingsPage() {
       }
 
       const failureCount = results.filter(
-        (result) => result.status === "rejected"
+        (result) => result.status === "rejected",
       ).length;
       if (failureCount > 0) {
         throw new Error(
-          `${failureCount} save operation${failureCount === 1 ? "" : "s"} failed. The latest server state has been reloaded.`
+          `${failureCount} save operation${failureCount === 1 ? "" : "s"} failed. The latest server state has been reloaded.`,
         );
       }
       toast.success("Project settings saved.");
@@ -169,7 +167,7 @@ export default function ProjectSettingsPage() {
       toast.error(
         err instanceof Error
           ? err.message
-          : "Couldn't save your changes. Please try again."
+          : "Couldn't save your changes. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -204,9 +202,9 @@ export default function ProjectSettingsPage() {
     const tagChanges = tagManagerRef.current?.collectChanges();
     return Boolean(
       tagChanges &&
-        (tagChanges.creates.length > 0 ||
-          tagChanges.updates.length > 0 ||
-          tagChanges.deletes.length > 0)
+      (tagChanges.creates.length > 0 ||
+        tagChanges.updates.length > 0 ||
+        tagChanges.deletes.length > 0),
     );
   };
 
@@ -242,40 +240,30 @@ export default function ProjectSettingsPage() {
             />
           </Field>
 
-          <Field>
-            <FieldLabel>Label mapping</FieldLabel>
-            <FieldDescription>
-              The classes annotators assign. Stored as name → numeric id.
-            </FieldDescription>
+          <SettingsSection
+            title="Label mapping"
+            description="The classes annotators assign. Stored as name → numeric id."
+          >
             <LabelMappingEditor
               key={`labels-${project.id}`}
               value={labelMapping.labels}
-              onChange={(labels) =>
-                setLabelMapping({ version: 2, labels })
+              supercategories={labelMapping.supercategories}
+              onChange={(labels, supercategories) =>
+                setLabelMapping({ version: 3, labels, supercategories })
               }
               disabled={!isSupervisor}
             />
-          </Field>
+          </SettingsSection>
 
-          <Field>
-            <FieldLabel>Annotation settings</FieldLabel>
-            <FieldDescription>
-              Configure which tools and options are available to annotators.
-            </FieldDescription>
-            <AnnotationSettings
-              key={`ann-settings-${project.id}`}
-              value={metaInfo}
-              onChange={setMetaInfo}
-              disabled={!isSupervisor}
-            />
-          </Field>
-
-          <Field>
-            <FieldLabel>Tags</FieldLabel>
-            <FieldDescription>
-              Define tags that can be applied to images to track annotation
-              progress.
-            </FieldDescription>
+          <SettingsSection
+            title="Tags"
+            description={
+              <>
+                Define tags that can be applied to images to track annotation
+                progress.
+              </>
+            }
+          >
             {loadingTags ? (
               <LoadingSpinner />
             ) : (
@@ -283,14 +271,40 @@ export default function ProjectSettingsPage() {
                 ref={tagManagerRef}
                 tags={projectTags}
                 disabled={!isSupervisor}
+                onDirtyChange={setTagsDirty}
               />
             )}
-          </Field>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Annotation settings"
+            description="Configure which tools and options are available to annotators."
+          >
+            <AnnotationSettings
+              key={`ann-settings-${project.id}`}
+              value={metaInfo}
+              onChange={setMetaInfo}
+              onConfigureKeypoints={() => navigate(`/projects/${id}/keypoints`)}
+              disabled={!isSupervisor}
+            />
+          </SettingsSection>
 
           {isSupervisor && (
-            <Button type="submit" disabled={saving} className="w-fit">
-              {saving ? <Spinner /> : "Save"}
-            </Button>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground" aria-live="polite">
+                {isDirty ? "You have unsaved changes." : "No unsaved changes."}
+              </p>
+              <Button type="submit" disabled={saving || !isDirty}>
+                {saving ? (
+                  <>
+                    <Spinner />
+                    Saving…
+                  </>
+                ) : (
+                  "Save changes"
+                )}
+              </Button>
+            </div>
           )}
         </FieldGroup>
       </form>

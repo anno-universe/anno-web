@@ -5,12 +5,20 @@
  * { name: { id, color } }
  *
  * Project-level config v2 wraps this as:
- * { version: 2, labels: { name: { id, color } } }
+ * { version: 3, labels: { name: { id, color, keypoints? } } }
  */
 
 export interface LabelMappingEntry {
   id: number;
   color: string;
+  /** Ordered keypoint names for this category. Frontend-only soft schema. */
+  keypoints?: string[];
+  /** Optional parent category whose keypoint template is inherited. */
+  supercategory?: string;
+}
+
+export interface SupercategoryEntry {
+  keypoints?: string[];
 }
 
 export type LabelMappingValue = number | string | LabelMappingEntry;
@@ -58,7 +66,21 @@ export function getLabelEntry(
     if (rawId == null || Number.isNaN(Number(rawId))) return null;
     const id = Number(rawId);
     const color = isHexColor(obj.color) ? obj.color.toUpperCase() : stableColor(id);
-    return { id, color };
+    const keypoints = Array.isArray(obj.keypoints)
+      ? obj.keypoints.filter(
+          (name): name is string => typeof name === "string" && name.trim().length > 0
+        ).map((name) => name.trim())
+      : undefined;
+    const supercategory =
+      typeof obj.supercategory === "string" && obj.supercategory.trim()
+        ? obj.supercategory.trim()
+        : undefined;
+    return {
+      id,
+      color,
+      ...(keypoints?.length ? { keypoints } : {}),
+      ...(supercategory ? { supercategory } : {}),
+    };
   }
   if (!Number.isNaN(Number(value))) {
     const id = Number(value);
@@ -140,4 +162,41 @@ export function labelOptionsFromMapping(
       };
     })
     .sort((a, b) => a.value - b.value);
+}
+
+export interface ResolvedKeypointSchema {
+  label: number;
+  name: string;
+  keypoints: string[];
+  schemaKey: string;
+  supercategory?: string;
+}
+
+/** Resolve category-specific templates first, then inherited supercategory templates. */
+export function keypointSchemasFromConfig(config: {
+  labels: Record<string, LabelMappingEntry>;
+  supercategories?: Record<string, SupercategoryEntry>;
+}): ResolvedKeypointSchema[] {
+  const supercategories = config.supercategories ?? {};
+  return Object.entries(config.labels)
+    .map(([name, entry]) => {
+      const own = entry.keypoints?.filter(Boolean) ?? [];
+      const inherited = entry.supercategory
+        ? supercategories[entry.supercategory]?.keypoints?.filter(Boolean) ?? []
+        : [];
+      const keypoints = own.length > 0 ? own : inherited;
+      if (keypoints.length === 0) return null;
+      return {
+        label: entry.id,
+        name,
+        keypoints,
+        schemaKey:
+          own.length > 0
+            ? `label:${entry.id}`
+            : `supercategory:${entry.supercategory}`,
+        ...(entry.supercategory ? { supercategory: entry.supercategory } : {}),
+      };
+    })
+    .filter((schema): schema is ResolvedKeypointSchema => schema !== null)
+    .sort((a, b) => a.label - b.label);
 }

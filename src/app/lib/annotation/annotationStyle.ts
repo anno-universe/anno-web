@@ -8,8 +8,8 @@ import Circle from "ol/style/Circle";
 import Text from "ol/style/Text";
 import Point from "ol/geom/Point";
 import MultiPoint from "ol/geom/MultiPoint";
-import Polygon from "ol/geom/Polygon";
 import LineString from "ol/geom/LineString";
+import Polygon from "ol/geom/Polygon";
 import { getLabelColor } from "@/lib/utils/labelMapping";
 import { rotateHandleAnchor } from "./mapInteractions";
 
@@ -72,7 +72,7 @@ interface StyleOpts {
 }
 
 const annotationStyleCache = new Map<string, Style>();
-const keypointDraftStyleCache = new Map<number, Style>();
+const keypointDraftStyleCache = new Map<string, Style>();
 const vertexHandleStyleCache = new Map<string, Style>();
 
 /**
@@ -219,17 +219,48 @@ function keypointStyles(
       : color;
   const radius = isEditing ? 7 : isSelected ? 6 : 5;
 
-  return coords.map(
+  const sourceIndices = (feature.get("_keypointIndices") as number[] | undefined) ??
+    coords.map((_, index) => index);
+  const names = (feature.get("_keypointNames") as string[] | undefined) ?? [];
+  const edges = (feature.get("_keypointEdges") as Array<[string, string]> | undefined) ?? [];
+  const data = (feature.get("_keypointData") as number[][] | undefined) ?? [];
+  const coordinateBySourceIndex = new Map(
+    sourceIndices.map((sourceIndex, coordinateIndex) => [sourceIndex, coords[coordinateIndex]])
+  );
+  const nameToIndex = new Map(names.map((name, index) => [name, index]));
+  const edgeStyles = edges.flatMap(([from, to]) => {
+    const fromIndex = nameToIndex.get(from);
+    const toIndex = nameToIndex.get(to);
+    const a = fromIndex == null ? undefined : coordinateBySourceIndex.get(fromIndex);
+    const b = toIndex == null ? undefined : coordinateBySourceIndex.get(toIndex);
+    if (!a || !b) return [];
+    return [
+      new Style_({
+        geometry: new LineString([a, b]),
+        stroke: new Stroke({ color: pointColor, width: isSelected ? 2.5 : 2 }),
+      }),
+    ];
+  });
+
+  const pointStyles = coords.map(
     (c, i) =>
       new Style_({
         geometry: new Point(c),
         image: new Circle({
           radius,
-          fill: new Fill({ color: pointColor }),
-          stroke: new Stroke({ color: "white", width: isEditing ? 2 : 1.5 }),
+          fill: new Fill({
+            color: data[sourceIndices[i]]?.[2] === 1 ? "white" : pointColor,
+          }),
+          stroke: new Stroke({
+            color: data[sourceIndices[i]]?.[2] === 1 ? pointColor : "white",
+            width: isEditing ? 2 : 1.5,
+            lineDash: data[sourceIndices[i]]?.[2] === 1 ? [3, 2] : undefined,
+          }),
         }),
         text: new Text({
-          text: String(i + 1),
+          text: names[sourceIndices[i]]
+            ? `${sourceIndices[i]}. ${names[sourceIndices[i]]}`
+            : String(sourceIndices[i]),
           font: "bold 11px 'Noto Sans SC', system-ui, sans-serif",
           offsetY: -13,
           fill: new Fill({ color: pointColor }),
@@ -237,6 +268,7 @@ function keypointStyles(
         }),
       })
   );
+  return [...edgeStyles, ...pointStyles];
 }
 
 export function featureStyleFunction(
@@ -262,9 +294,11 @@ export function featureStyleFunction(
 
   const base = annotationStyle({ isSelected, isEditing, isDraft, color });
 
-  // A box draft is an editable preview (resize + rotate before labelling), so
-  // it shows the same handles as an explicit edit session.
-  const isBoxDraftPreview = isDraft && annType === "box" && boxRotationEnabled;
+  // A box draft is an editable preview (resize before labelling — plus rotate
+  // when the project enables it), so it shows the same handles as an explicit
+  // edit session. The rotation handle itself stays gated on boxRotationEnabled
+  // below.
+  const isBoxDraftPreview = isDraft && annType === "box";
   const showHandles = isEditing || isBoxDraftPreview;
 
   // While editing a polygon or box, overlay a persistent handle on every ring
@@ -294,8 +328,14 @@ export function featureStyleFunction(
  * amber "in-progress" color, numbered by their `index` property.
  */
 export function keypointDraftStyleFn(feature: Feature): Style {
+  if (feature.getGeometry() instanceof LineString || feature.get("_edge")) {
+    return new Style_({
+      stroke: new Stroke({ color: "#D97706", width: 2 }),
+    });
+  }
   const index = (feature.get("index") as number | undefined) ?? 0;
-  const cached = keypointDraftStyleCache.get(index);
+  const cacheKey = `${index}:${String(feature.get("name") ?? "")}:${String(feature.get("visibility") ?? 2)}`;
+  const cached = keypointDraftStyleCache.get(cacheKey);
   if (cached) return cached;
 
   const color = "hsl(28, 92%, 48%)";
@@ -306,14 +346,16 @@ export function keypointDraftStyleFn(feature: Feature): Style {
       stroke: new Stroke({ color: "white", width: 1.5 }),
     }),
     text: new Text({
-      text: String(index + 1),
+      text: feature.get("name")
+        ? `${index}. ${String(feature.get("name"))}`
+        : String(index),
       font: "bold 11px 'Noto Sans SC', system-ui, sans-serif",
       offsetY: -13,
       fill: new Fill({ color }),
       stroke: new Stroke({ color: "white", width: 3 }),
     }),
   });
-  keypointDraftStyleCache.set(index, style);
+  keypointDraftStyleCache.set(cacheKey, style);
   return style;
 }
 
