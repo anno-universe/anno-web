@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo, useReducer } from "react";
 import { useParams, useNavigate } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { Pencil, Trash2 } from "lucide-react";
@@ -18,6 +19,7 @@ import {
   applyImageTag,
   removeImageTag,
 } from "@/api/tags";
+import { queryKeys } from "@/lib/queryKeys";
 import { AnnotationMap } from "@/components/annotation/AnnotationMap";
 import { AnnotationToolbar } from "@/components/annotation/AnnotationToolbar";
 import { AnnotationSidePanel } from "@/components/annotation/AnnotationSidePanel";
@@ -68,6 +70,7 @@ export default function AnnotatePage() {
   const { projectId, imageId } = useParams();
   const pid = Number(projectId);
   const iid = Number(imageId);
+  const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
 
   const {
@@ -580,6 +583,8 @@ export default function AnnotatePage() {
         const created = await createAnnotation(pid, iid, input);
         setAnnotations((prev) => [...prev, created]);
         refreshOperations();
+        // Keep the images-list annotation_count fresh on back-navigation.
+        queryClient.invalidateQueries({ queryKey: queryKeys.images.all(pid) });
         return created;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Failed to create";
@@ -587,7 +592,7 @@ export default function AnnotatePage() {
         return null;
       }
     },
-    [pid, iid]
+    [pid, iid, queryClient]
   );
 
   // A shape was drawn (box/polygon closed, keypoint group finished).
@@ -739,13 +744,15 @@ export default function AnnotatePage() {
       setShowDeleteConfirm(false);
       setDeleteTargetId(null);
       refreshOperations();
+      // Keep the images-list annotation_count fresh on back-navigation.
+      queryClient.invalidateQueries({ queryKey: queryKeys.images.all(pid) });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to delete";
       toast.error(msg);
       setShowDeleteConfirm(false);
       setDeleteTargetId(null);
     }
-  }, [pid, iid, deleteTargetId, select]);
+  }, [pid, iid, deleteTargetId, select, queryClient]);
 
   // ---- Tag handlers ----
 
