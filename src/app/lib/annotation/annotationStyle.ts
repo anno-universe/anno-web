@@ -294,9 +294,11 @@ export function featureStyleFunction(
 
   const base = annotationStyle({ isSelected, isEditing, isDraft, color });
 
-  // A box draft is an editable preview (resize + rotate before labelling), so
-  // it shows the same handles as an explicit edit session.
-  const isBoxDraftPreview = isDraft && annType === "box" && boxRotationEnabled;
+  // A box draft is an editable preview (resize before labelling — plus rotate
+  // when the project enables it), so it shows the same handles as an explicit
+  // edit session. The rotation handle itself stays gated on boxRotationEnabled
+  // below.
+  const isBoxDraftPreview = isDraft && annType === "box";
   const showHandles = isEditing || isBoxDraftPreview;
 
   // While editing a polygon or box, overlay a persistent handle on every ring

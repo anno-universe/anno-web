@@ -493,15 +493,15 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       });
     }, []);
 
-    // Attach a rotation-capable box editor to the draft preview, so the user
-    // can resize / rotate it before choosing a label. onChange re-anchors the
-    // floating card so it tracks the box.
+    // Attach a box editor to the draft preview, so the user can resize (and,
+    // when the project enables it, rotate) it before choosing a label. onChange
+    // re-anchors the floating card so it tracks the box.
     const activateDraftBoxEdit = useCallback(
       (feature: Feature) => {
         const map = mapRef.current;
         if (!map) return;
         const edit = createBoxEditInteraction(feature, {
-          rotationEnabled: true,
+          rotationEnabled: boxRotationEnabledRef.current === true,
           onChange: () => positionOverlay(),
           onEnd: () => positionOverlay(),
         });
@@ -559,12 +559,15 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
         feature.set("annotation_type", type);
         feature.set("label", null);
 
-        const editableBox =
-          type === "box" && boxRotationEnabledRef.current === true;
+        // Every box draft is an editable preview (resize, plus rotate when the
+        // project enables it); polygon/keypoint drafts just await a label.
+        const editableBox = type === "box";
+        const boxRotation =
+          editableBox && boxRotationEnabledRef.current === true;
 
-        // Bind the rotate handle to the box's top edge by normalising the ring
-        // winding (createBox()'s winding starts on a vertical edge).
-        if (editableBox) normalizeBoxFeatureWinding(feature);
+        // Rotation binds the rotate handle to the box's top edge, so normalise
+        // the ring winding (createBox()'s winding starts on a vertical edge).
+        if (boxRotation) normalizeBoxFeatureWinding(feature);
 
         src.addFeature(feature);
         hasDraftRef.current = true;
