@@ -22,7 +22,11 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { LabelMappingEditor } from "./LabelMappingEditor";
+import {
+  LabelMappingEditor,
+  hasLabelMappingIssues,
+  type LabelMappingIssues,
+} from "./LabelMappingEditor";
 import { AnnotationSettings } from "./AnnotationSettings";
 import type {
   LabelMappingConfigV2,
@@ -49,10 +53,18 @@ export function CreateProjectDialog({ open, onClose }: Props) {
   });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [labelIssues, setLabelIssues] = useState<LabelMappingIssues | null>(
+    null,
+  );
+  const labelBlocking = labelIssues ? hasLabelMappingIssues(labelIssues) : false;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    if (labelBlocking) {
+      setError("Fix the highlighted category problems before creating.");
+      return;
+    }
     setError("");
 
     setSubmitting(true);
@@ -119,7 +131,8 @@ export function CreateProjectDialog({ open, onClose }: Props) {
             <Field>
               <FieldLabel>Label mapping</FieldLabel>
               <FieldDescription>
-                The classes annotators assign. Stored as name → numeric id.
+                The categories annotators can assign. Each maps a name to a
+                numeric Label ID used in exports and the API.
               </FieldDescription>
               <LabelMappingEditor
                 value={labelMapping.labels}
@@ -127,6 +140,7 @@ export function CreateProjectDialog({ open, onClose }: Props) {
                 onChange={(labels, supercategories) =>
                   setLabelMapping({ version: 3, labels, supercategories })
                 }
+                onValidityChange={setLabelIssues}
               />
             </Field>
 
@@ -148,7 +162,7 @@ export function CreateProjectDialog({ open, onClose }: Props) {
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" disabled={submitting || labelBlocking}>
               {submitting ? <Spinner /> : "Create"}
             </Button>
           </DialogFooter>

@@ -2,11 +2,12 @@ import { useState } from "react";
 import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { LabelMappingEditor } from "./LabelMappingEditor";
+import { LabelMappingEditor, type LabelMappingIssues } from "./LabelMappingEditor";
 import type {
   LabelMappingEntry,
   SupercategoryEntry,
 } from "@/lib/utils/labelMapping";
+import type { KeypointEdge } from "@/lib/project/configVersion";
 
 beforeAll(() => {
   // The labels table renders a Radix Select per row; stub the browser APIs
@@ -86,12 +87,91 @@ describe("LabelMappingEditor", () => {
     render(<Harness />);
 
     await user.click(
-      screen.getByRole("button", { name: /add supercategory/i }),
+      screen.getByRole("button", { name: /add parent category/i }),
     );
     await user.type(screen.getByPlaceholderText("dog"), "mammal");
 
     // The pre-existing label had no supercategory; naming a brand-new
-    // supercategory must not adopt every unparented label.
+    // parent category must not adopt every unparented label.
     expect(latest.cat?.supercategory).toBeUndefined();
+  });
+
+  it("flags duplicate category names as a blocking issue", async () => {
+    const user = userEvent.setup();
+    // Held in an object so TS keeps the union type (a bare closure-assigned
+    // `let` narrows to its initializer at the read site).
+    const captured: { issues: LabelMappingIssues | null } = { issues: null };
+
+    function Harness() {
+      const [labels, setLabels] = useState<Record<string, LabelMappingEntry>>({
+        cat: { id: 1, color: "#2563EB" },
+      });
+      return (
+        <LabelMappingEditor
+          value={labels}
+          supercategories={{}}
+          onChange={(nextLabels) => setLabels(nextLabels)}
+          onValidityChange={(next) => {
+            captured.issues = next;
+          }}
+        />
+      );
+    }
+    render(<Harness />);
+
+    // Add a second category and give it the same name as the first.
+    await user.click(screen.getByRole("button", { name: /add category/i }));
+    const nameInputs = screen.getAllByPlaceholderText("golden_retriever");
+    await user.type(nameInputs[nameInputs.length - 1], "cat");
+
+    expect(captured.issues?.duplicateNames).toContain("cat");
+    expect(screen.getByText(/names must be unique/i)).toBeInTheDocument();
+  });
+
+  it("migrates a parent category's keypoint edges when it is renamed", async () => {
+    const user = userEvent.setup();
+    const captured: { edges: Record<string, KeypointEdge[]> | null } = {
+      edges: null,
+    };
+    render(
+      <LabelMappingEditor
+        value={{}}
+        supercategories={{ dog: {} }}
+        keypointEdges={{ "supercategory:dog": [["a", "b"]] }}
+        onKeypointEdgesChange={(next) => {
+          captured.edges = next;
+        }}
+        onChange={noop}
+      />,
+    );
+
+    // Append a character: "dog" -> "dogs" (the rename path, not a full clear).
+    await user.type(screen.getByDisplayValue("dog"), "s");
+
+    expect(captured.edges).toEqual({ "supercategory:dogs": [["a", "b"]] });
+  });
+
+  it("drops a category's keypoint edges when it is removed", async () => {
+    const user = userEvent.setup();
+    const captured: { edges: Record<string, KeypointEdge[]> | null } = {
+      edges: null,
+    };
+    render(
+      <LabelMappingEditor
+        value={{ paw: { id: 5, color: "#112233" } }}
+        supercategories={{}}
+        keypointEdges={{ "label:5": [["x", "y"]] }}
+        onKeypointEdgesChange={(next) => {
+          captured.edges = next;
+        }}
+        onChange={noop}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /remove category paw/i }),
+    );
+
+    expect(captured.edges).toEqual({});
   });
 });

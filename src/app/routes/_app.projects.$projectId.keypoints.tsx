@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/select";
 import {
   PROJECT_CONFIG_VERSION,
+  pruneKeypointEdges,
   upgradeLabelMappingConfig,
   upgradeMetaInfoConfig,
   type KeypointEdge,
@@ -51,11 +52,20 @@ import {
 import {
   keypointSchemasFromConfig,
   type LabelMappingEntry,
+  type ResolvedKeypointSchema,
 } from "@/lib/utils/labelMapping";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { stableStringify } from "@/lib/utils/json";
 import { queryKeys } from "@/lib/queryKeys";
+import type { ProjectOutput } from "@/types/project";
 import type { ProjectContext } from "./_app.projects.$projectId";
+
+/** Human-readable heading for a resolved schema (never the raw schemaKey). */
+function schemaTitle(schema: ResolvedKeypointSchema): string {
+  return schema.supercategory
+    ? `Parent category: ${schema.supercategory}`
+    : `Category: ${schema.label} - ${schema.name}`;
+}
 
 type Step = 1 | 2 | 3;
 
@@ -86,6 +96,17 @@ export default function KeypointConfigurationPage() {
     () => Array.from(new Map(schemas.map((schema) => [schema.schemaKey, schema])).values()),
     [schemas]
   );
+  // Category names sharing each schema, so we can warn that editing a shared
+  // template/connections affects every inheriting category.
+  const schemaUsage = useMemo(() => {
+    const usage = new Map<string, string[]>();
+    for (const schema of schemas) {
+      const names = usage.get(schema.schemaKey) ?? [];
+      names.push(schema.name);
+      usage.set(schema.schemaKey, names);
+    }
+    return usage;
+  }, [schemas]);
   const labelsBySupercategory = useMemo(() => {
     const grouped = new Map<string, Array<[string, LabelMappingEntry]>>(
       Object.keys(mapping.supercategories).map((name) => [name, []])
@@ -112,11 +133,11 @@ export default function KeypointConfigurationPage() {
       if (new Set(normalized).size !== normalized.length) errors.push(`${title} contains duplicate point names.`);
     };
     Object.entries(mapping.supercategories).forEach(([name, entry]) =>
-      validate(`Supercategory ${name}`, entry.keypoints ?? [])
+      validate(`Parent category "${name}"`, entry.keypoints ?? [])
     );
     Object.entries(mapping.labels).forEach(([name, entry]) => {
       if (!entry.supercategory || entry.keypoints?.length) {
-        validate(`Category ${name}`, entry.keypoints ?? []);
+        validate(`Category "${name}"`, entry.keypoints ?? []);
       }
     });
     return errors;
@@ -128,11 +149,11 @@ export default function KeypointConfigurationPage() {
       for (const [from, to] of edges[schema.schemaKey] ?? []) {
         const key = [from, to].sort().join("\u0000");
         if (!schema.keypoints.includes(from) || !schema.keypoints.includes(to)) {
-          errors.push(`${schema.schemaKey} has an edge whose point no longer exists.`);
+          errors.push(`${schemaTitle(schema)} has a connection whose point no longer exists.`);
         } else if (from === to) {
-          errors.push(`${schema.schemaKey} has a self-connecting edge.`);
+          errors.push(`${schemaTitle(schema)} has a point connected to itself.`);
         } else if (seen.has(key)) {
-          errors.push(`${schema.schemaKey} has a duplicate edge.`);
+          errors.push(`${schemaTitle(schema)} has a duplicate connection.`);
         }
         seen.add(key);
       }
@@ -180,7 +201,7 @@ export default function KeypointConfigurationPage() {
 
   async function save() {
     if (validSchemaCount === 0 || templateErrors.length > 0) {
-      toast.error("Configure at least one keypoint schema before enabling the tool.");
+      toast.error("Configure at least one keypoint template before enabling the tool.");
       setStep(1);
       return;
     }
@@ -208,17 +229,29 @@ export default function KeypointConfigurationPage() {
     };
     setSaving(true);
     try {
-      await updateProject(id, {
+      // Drop edge-sets whose schema no longer exists so orphaned keys don't
+      // persist (and can't wrongly resurrect if an old schemaKey reappears).
+      const validKeys = new Set(uniqueSchemas.map((schema) => schema.schemaKey));
+      const { edges: prunedEdges } = pruneKeypointEdges(edges, validKeys);
+      const updated = await updateProject(id, {
         label_mapping: normalizedMapping,
         meta_info: {
           ...metaInfo,
           version: PROJECT_CONFIG_VERSION,
           keypoint_enabled: true,
-          keypoint_edges: edges,
+          keypoint_edges: prunedEdges,
         },
       });
+      // Write the fresh project into the detail cache BEFORE navigating, so the
+      // settings page remounts with keypoint_enabled=true instead of the stale
+      // 15s cache (otherwise it shows the toggle off + a spurious "unsaved
+      // changes" whose Save would revert the enable).
+      queryClient.setQueryData<ProjectOutput>(
+        queryKeys.projects.detail(id),
+        (old) => (old ? { ...old, ...updated } : updated),
+      );
       refreshProject();
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.lists() });
       toast.success("Keypoint annotation enabled.");
       allowLeave.current = true;
       navigate(`/projects/${id}/settings`);
@@ -245,7 +278,8 @@ export default function KeypointConfigurationPage() {
       <div>
         <h2 className="text-lg font-semibold">Keypoint configuration</h2>
         <p className="text-sm text-muted-foreground">
-          Complete the schema and connection steps before the annotation tool is enabled.
+          Define each category's point template and how the points connect. The
+          tool turns on once setup is saved.
         </p>
       </div>
       <Progress value={(step / 3) * 100} />
@@ -253,9 +287,11 @@ export default function KeypointConfigurationPage() {
       {step === 1 && (
         <Card>
           <CardHeader>
-            <CardTitle>1. Keypoint schemas</CardTitle>
+            <CardTitle>1. Keypoint templates</CardTitle>
             <CardDescription>
-              Classes inherit their supercategory template by default. Configure a class only when it needs a different schema.
+              A template is the ordered list of points annotators place for a
+              category. Categories inherit their parent category's template by
+              default — give a category its own only when it needs different points.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
@@ -304,28 +340,38 @@ export default function KeypointConfigurationPage() {
       {step === 2 && (
         <Card>
           <CardHeader>
-            <CardTitle>2. Connection rules</CardTitle>
+            <CardTitle>2. Connections</CardTitle>
             <CardDescription>
-              Edges are frontend display metadata. Absent points automatically hide their edges.
+              Connect points into a skeleton for annotators. Connections only
+              affect how keypoints are drawn; a point marked absent hides its
+              lines automatically.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            {uniqueSchemas.map((schema) => (
-              <EdgeEditor
-                key={schema.schemaKey}
-                title={schema.supercategory ? `Supercategory: ${schema.supercategory}` : `Category: ${schema.name}`}
-                keypoints={schema.keypoints}
-                edges={edges[schema.schemaKey] ?? []}
-                onChange={(next) => setEdges((current) => ({ ...current, [schema.schemaKey]: next }))}
-              />
-            ))}
+            {uniqueSchemas.map((schema) => {
+              const sharedWith = schemaUsage.get(schema.schemaKey) ?? [];
+              return (
+                <EdgeEditor
+                  key={schema.schemaKey}
+                  title={schemaTitle(schema)}
+                  subtitle={
+                    schema.supercategory && sharedWith.length > 1
+                      ? `Shared by ${sharedWith.length} categories (${sharedWith.join(", ")}) — changes apply to all.`
+                      : undefined
+                  }
+                  keypoints={schema.keypoints}
+                  edges={edges[schema.schemaKey] ?? []}
+                  onChange={(next) => setEdges((current) => ({ ...current, [schema.schemaKey]: next }))}
+                />
+              );
+            })}
             {edgeErrors.map((error) => (
               <p key={error} className="text-sm text-destructive">{error}</p>
             ))}
           </CardContent>
           <CardFooter className="justify-between">
             <Button type="button" variant="outline" onClick={() => setStep(1)}>
-              <ArrowLeft data-icon="inline-start" /> Schema
+              <ArrowLeft data-icon="inline-start" /> Templates
             </Button>
             <Button type="button" onClick={() => setStep(3)} disabled={edgeErrors.length > 0}>
               Review <ArrowRight data-icon="inline-end" />
@@ -339,18 +385,26 @@ export default function KeypointConfigurationPage() {
           <CardHeader>
             <CardTitle>3. Review and enable</CardTitle>
             <CardDescription>
-              Saving updates label_mapping and meta_info together.
+              Review the templates and connections that will apply to this
+              project, then enable keypoint annotation.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            {uniqueSchemas.map((schema) => (
-              <div key={schema.schemaKey} className="rounded-md border p-3">
-                <p className="font-medium">{schema.schemaKey}</p>
-                <p className="text-sm text-muted-foreground">
-                  {schema.keypoints.length} points · {(edges[schema.schemaKey] ?? []).length} edges
-                </p>
-              </div>
-            ))}
+            {uniqueSchemas.map((schema) => {
+              const sharedWith = schemaUsage.get(schema.schemaKey) ?? [];
+              return (
+                <div key={schema.schemaKey} className="rounded-md border p-3">
+                  <p className="font-medium">{schemaTitle(schema)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {schema.keypoints.length} points ·{" "}
+                    {(edges[schema.schemaKey] ?? []).length} connections
+                    {schema.supercategory && sharedWith.length > 1
+                      ? ` · shared by ${sharedWith.length} categories`
+                      : ""}
+                  </p>
+                </div>
+              );
+            })}
           </CardContent>
           <CardFooter className="justify-between">
             <Button type="button" variant="outline" onClick={() => setStep(2)} disabled={saving}>
@@ -366,7 +420,7 @@ export default function KeypointConfigurationPage() {
       <ConfirmDialog
         open={leaveGuard.blocked}
         title="Discard keypoint configuration?"
-        message="The schema and connection changes on this page have not been saved."
+        message="The template and connection changes on this page have not been saved."
         confirmLabel="Discard"
         onConfirm={leaveGuard.proceed}
         onCancel={leaveGuard.cancel}
@@ -395,9 +449,10 @@ function SupercategorySchemaEditor({
   return (
     <section className="flex flex-col gap-4 rounded-md border p-4">
       <div>
-        <p className="font-medium">Supercategory: {name}</p>
+        <p className="font-medium">Parent category: {name}</p>
         <p className="text-xs text-muted-foreground">
-          Default schema for {labels.length} {labels.length === 1 ? "class" : "classes"}.
+          Default template for {labels.length}{" "}
+          {labels.length === 1 ? "category" : "categories"}.
         </p>
       </div>
 
@@ -410,9 +465,9 @@ function SupercategorySchemaEditor({
 
       <div className="flex flex-col gap-2">
         <div>
-          <p className="text-sm font-medium">Classes</p>
+          <p className="text-sm font-medium">Categories</p>
           <p className="text-xs text-muted-foreground">
-            Each class inherits the schema above until you configure an override.
+            Each category inherits the template above until you give it its own.
           </p>
         </div>
 
@@ -446,7 +501,7 @@ function SupercategorySchemaEditor({
                 </div>
                 <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
                   <Badge variant={hasOverride ? "secondary" : "outline"}>
-                    {hasOverride ? "Class override" : "Inherited"}
+                    {hasOverride ? "Custom template" : "Inherited"}
                   </Badge>
                   {hasOverride && (
                     <Button
@@ -484,7 +539,7 @@ function SupercategorySchemaEditor({
 
         {labels.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            No classes use this supercategory.
+            No categories use this parent category.
           </p>
         )}
       </div>
@@ -494,11 +549,13 @@ function SupercategorySchemaEditor({
 
 function EdgeEditor({
   title,
+  subtitle,
   keypoints,
   edges,
   onChange,
 }: {
   title: string;
+  subtitle?: string;
   keypoints: string[];
   edges: KeypointEdge[];
   onChange: (edges: KeypointEdge[]) => void;
@@ -523,7 +580,12 @@ function EdgeEditor({
     <div className="grid gap-4 rounded-md border p-4 md:grid-cols-2">
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
-          <p className="font-medium">{title}</p>
+          <div className="min-w-0">
+            <p className="font-medium">{title}</p>
+            {subtitle && (
+              <p className="text-xs text-muted-foreground">{subtitle}</p>
+            )}
+          </div>
           <Button
             type="button"
             variant="outline"
@@ -531,7 +593,7 @@ function EdgeEditor({
             onClick={addEdge}
             disabled={keypoints.length < 2 || edges.length >= maxEdges}
           >
-            <Plus data-icon="inline-start" /> Add edge
+            <Plus data-icon="inline-start" /> Add connection
           </Button>
         </div>
         {edges.map((edge, index) => (
@@ -547,12 +609,12 @@ function EdgeEditor({
               keypoints={keypoints}
               onChange={(to) => onChange(edges.map((item, i) => i === index ? [item[0], to] : item))}
             />
-            <Button type="button" variant="ghost" size="icon-sm" onClick={() => onChange(edges.filter((_, i) => i !== index))} aria-label={`Remove edge ${index + 1}`}>
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => onChange(edges.filter((_, i) => i !== index))} aria-label={`Remove connection ${index + 1}`}>
               <Trash2 />
             </Button>
           </div>
         ))}
-        {edges.length === 0 && <p className="text-sm text-muted-foreground">No edges configured.</p>}
+        {edges.length === 0 && <p className="text-sm text-muted-foreground">No connections yet.</p>}
       </div>
       <EdgePreview keypoints={keypoints} edges={edges} />
     </div>
@@ -580,7 +642,7 @@ function EdgePreview({ keypoints, edges }: { keypoints: string[]; edges: Keypoin
     })
   );
   return (
-    <svg viewBox="0 0 320 240" className="h-60 w-full rounded-md bg-muted/40" role="img" aria-label="Keypoint edge preview">
+    <svg viewBox="0 0 320 240" className="h-60 w-full rounded-md bg-muted/40" role="img" aria-label="Keypoint connection preview">
       {edges.map(([from, to], index) => {
         const a = positions.get(from);
         const b = positions.get(to);
