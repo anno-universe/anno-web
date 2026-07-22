@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useParams, useOutletContext, useNavigate } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { updateProject, deleteProject } from "@/api/projects";
 import {
@@ -42,6 +43,7 @@ import {
   type MetaInfoConfigV2,
 } from "@/lib/project/configVersion";
 import { stableStringify } from "@/lib/utils/json";
+import { queryKeys } from "@/lib/queryKeys";
 import type { ProjectUpdateInput } from "@/types/project";
 import type { TagOutput } from "@/types/tag";
 import type { ProjectContext } from "./_app.projects.$projectId";
@@ -50,6 +52,7 @@ export default function ProjectSettingsPage() {
   const { projectId } = useParams();
   const id = Number(projectId);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { project, refreshProject } = useOutletContext<ProjectContext>();
 
   const [error, setError] = useState("");
@@ -142,8 +145,16 @@ export default function ProjectSettingsPage() {
       }
 
       const results = await Promise.allSettled(operations);
-      if (projectChanged) refreshProject();
-      if (tagOpsPending) await loadTags();
+      if (projectChanged) {
+        refreshProject();
+        // name / updated_at are shown in the cached /projects list.
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.lists() });
+      }
+      if (tagOpsPending) {
+        await loadTags();
+        // The images page reads active tags via React Query for its filter chips.
+        queryClient.invalidateQueries({ queryKey: queryKeys.images.tags(id) });
+      }
 
       const failureCount = results.filter(
         (result) => result.status === "rejected"
@@ -169,6 +180,9 @@ export default function ProjectSettingsPage() {
     setDeleting(true);
     try {
       await deleteProject(id);
+      // Drop the deleted project from the list and detail caches.
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.lists() });
+      queryClient.removeQueries({ queryKey: queryKeys.projects.detail(id) });
       navigate("/projects", { replace: true });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to delete project");

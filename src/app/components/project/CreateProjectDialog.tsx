@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { createProject } from "@/api/projects";
+import { queryKeys } from "@/lib/queryKeys";
 import { Spinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +36,7 @@ interface Props {
 
 export function CreateProjectDialog({ open, onClose }: Props) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [metaInfo, setMetaInfo] = useState<MetaInfoConfigV2>({
@@ -60,6 +63,9 @@ export function CreateProjectDialog({ open, onClose }: Props) {
         label_mapping:
           Object.keys(labelMapping.labels).length > 0 ? labelMapping : undefined,
       });
+      // Refresh the cached /projects list so the new project appears on
+      // back-navigation (staleTime would otherwise serve stale cache).
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.lists() });
       onClose();
       navigate(`/projects/${project.id}`);
     } catch (err: unknown) {

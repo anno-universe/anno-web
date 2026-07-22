@@ -1,11 +1,15 @@
 export const queryKeys = {
   projects: {
     all: ["projects"] as const,
+    // Prefix matching every paginated list page — use for invalidation.
+    lists: () => ["projects", "list"] as const,
     list: (limit: number, offset: number) =>
       ["projects", "list", { limit, offset }] as const,
     detail: (projectId: number) => ["projects", "detail", projectId] as const,
   },
   images: {
+    // Prefix matching every page/tag-filter combo — use for invalidation.
+    all: (projectId: number) => ["projects", projectId, "images"] as const,
     list: (
       projectId: number,
       params: { limit: number; offset: number; tags: string[] }

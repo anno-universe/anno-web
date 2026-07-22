@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useParams, useOutletContext } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle, AlertCircle, X, Loader2 } from "lucide-react";
 import { normalizeError } from "@/lib/utils/errors";
 import { runBoundedTasks } from "@/lib/utils/concurrency";
 import { uploadImage } from "@/api/images";
+import { queryKeys } from "@/lib/queryKeys";
 import { ImageUploadZone } from "@/components/image/ImageUploadZone";
 import { Button } from "@/components/ui/button";
 import {
@@ -98,6 +100,7 @@ function StatusBadge({ entry }: { entry: UploadFileEntry }) {
 export default function UploadPage() {
   const { projectId } = useParams();
   const pid = Number(projectId);
+  const queryClient = useQueryClient();
   const { project, refreshProject } = useOutletContext<ProjectContext>();
 
   const isSupervisor = project.my_role?.toLowerCase() === "supervisor";
@@ -210,7 +213,11 @@ export default function UploadPage() {
     activeBatchRef.current = null;
     setUploading(false);
 
-    if (succeeded > 0) refreshProject();
+    if (succeeded > 0) {
+      refreshProject();
+      // Refresh the cached images list so new uploads appear on return.
+      queryClient.invalidateQueries({ queryKey: queryKeys.images.all(pid) });
+    }
     if (controller.signal.aborted) {
       setBatchComplete(false);
       return;
