@@ -671,8 +671,19 @@ export default function AnnotatePage() {
       if (!current || current.saving || current.points.length >= current.names.length) {
         return current;
       }
-      const point: KeypointTuple = [x, y, current.placementVisibility];
+      const point: KeypointTuple = [x, y, 2];
       return { ...current, points: [...current.points, point] };
+    });
+  }, []);
+
+  const handleToggleKeypointVisibility = useCallback((index: number) => {
+    setKeypointSession((current) => {
+      if (!current || !current.points[index]) return current;
+      const points = [...current.points];
+      const [x, y, vis] = points[index];
+      const newVis = vis === 2 ? 1 : vis === 1 ? 0 : 2;
+      points[index] = [x, y, newVis];
+      return { ...current, points };
     });
   }, []);
 
@@ -1209,16 +1220,11 @@ export default function AnnotatePage() {
                 names: schema.keypoints,
                 schemaKey: schema.schemaKey,
                 points: [],
-                placementVisibility: 2,
                 saving: false,
               })
             }
-            onPlacementVisibilityChange={(placementVisibility) =>
-              setKeypointSession((current) =>
-                current ? { ...current, placementVisibility } : current
-              )
-            }
-            onMarkAbsent={handleKeypointAbsent}
+            onTogglePointVisibility={handleToggleKeypointVisibility}
+            onMarkCurrentAbsent={handleKeypointAbsent}
             onUndo={handleKeypointUndo}
             onCancel={handleKeypointCancel}
             onSave={handleKeypointSave}
