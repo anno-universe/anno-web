@@ -8,7 +8,6 @@ import {
 import Map from "ol/Map";
 import View from "ol/View";
 import Overlay from "ol/Overlay";
-import Collection from "ol/Collection";
 import Feature from "ol/Feature";
 import VectorLayer from "ol/layer/Vector";
 import VectorSource from "ol/source/Vector";
@@ -18,7 +17,6 @@ import Point from "ol/geom/Point";
 import MultiPoint from "ol/geom/MultiPoint";
 import LineString from "ol/geom/LineString";
 import Polygon from "ol/geom/Polygon";
-import Modify from "ol/interaction/Modify";
 import DoubleClickZoom from "ol/interaction/DoubleClickZoom";
 import type { default as OLMap } from "ol/Map";
 import { unByKey } from "ol/Observable";
@@ -52,10 +50,9 @@ import {
   createDrawBoxInteraction,
   createDrawPolygonInteraction,
   createSelectInteraction,
-  createTranslateInteraction,
-  createKeypointModifyInteraction,
   createBoxEditInteraction,
   createPolygonEditInteraction,
+  createKeypointEditInteraction,
   normalizeBoxTopEdge,
 } from "@/lib/annotation/mapInteractions";
 import { mapToImage, flipGeometryY } from "@/lib/annotation/imageProjection";
@@ -239,9 +236,8 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     const vectorLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
     const selectRef =
       useRef<ReturnType<typeof createSelectInteraction> | null>(null);
-    const modifyRef = useRef<Modify | null>(null);
-    const translateRef =
-      useRef<ReturnType<typeof createTranslateInteraction> | null>(null);
+    const keypointEditRef =
+      useRef<ReturnType<typeof createKeypointEditInteraction> | null>(null);
     const boxEditRef =
       useRef<ReturnType<typeof createBoxEditInteraction> | null>(null);
     const polyEditRef =
@@ -262,7 +258,6 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     } | null>(null);
 
     // Edit-session state
-    const editFeaturesRef = useRef<Collection<Feature>>(new Collection());
     const editDirtyRef = useRef(false);
     const editingIdRef = useRef<number | null>(null);
     /**
@@ -1252,11 +1247,6 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
           vectorSourceRef.current?.getFeatureById(editingAnnotationId);
         if (feature) {
           const type = (feature.get("annotation_type") || "box") as AnnotationType;
-          // Fresh collection per edit session — the shared ref accumulated
-          // listeners from prior (removed-but-not-disposed) Modify/Translate
-          // interactions. A new Collection holds exactly this feature.
-          const editColl = new Collection<Feature>([feature]);
-          editFeaturesRef.current = editColl;
           editingIdRef.current = editingAnnotationId;
 
           if (type === "box") {
@@ -1286,16 +1276,14 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
             map.addInteraction(polyEdit);
             polyEditRef.current = polyEdit;
           } else {
-            // Keypoint: Modify for vertex drag + Translate for whole-group move.
-            const translate = createTranslateInteraction(editColl);
-            translate.on("translateend", () => notifyDirty(true));
-            map.addInteraction(translate);
-            translateRef.current = translate;
-
-            const modify = createKeypointModifyInteraction(editColl);
-            modify.on("modifyend", () => notifyDirty(true));
-            map.addInteraction(modify);
-            modifyRef.current = modify;
+            // Keypoint: custom PointerInteraction — vertex drag moves individual
+            // points; press near the group (not on a vertex) translates all.
+            const keypointEdit = createKeypointEditInteraction(feature, {
+              onChange: () => notifyDirty(true),
+              onEnd: () => notifyDirty(true),
+            });
+            map.addInteraction(keypointEdit);
+            keypointEditRef.current = keypointEdit;
           }
           refreshFeatureStyles([editingAnnotationId]);
         }
@@ -1303,15 +1291,12 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
 
       return () => {
         const leavingId = editingIdRef.current;
-        if (modifyRef.current) map.removeInteraction(modifyRef.current);
-        if (translateRef.current) map.removeInteraction(translateRef.current);
+        if (keypointEditRef.current) map.removeInteraction(keypointEditRef.current);
         if (boxEditRef.current) map.removeInteraction(boxEditRef.current);
         if (polyEditRef.current) map.removeInteraction(polyEditRef.current);
-        modifyRef.current = null;
-        translateRef.current = null;
+        keypointEditRef.current = null;
         boxEditRef.current = null;
         polyEditRef.current = null;
-        editFeaturesRef.current.clear();
         editingIdRef.current = null;
         // Discard any lingering snapshot — it belongs to the edit session
         editSnapshotRef.current = null;

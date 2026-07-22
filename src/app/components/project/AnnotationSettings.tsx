@@ -80,8 +80,9 @@ export function AnnotationSettings({
             <FieldContent>
               <FieldTitle>Enable keypoint annotation</FieldTitle>
               <FieldDescription>
-                Configure the point schema and connections in the guided setup.
-                Turning the tool off keeps the existing configuration.
+                Turning this on opens a guided setup for point templates and
+                connections; it stays off until you finish setup. Turning it off
+                later keeps the saved configuration.
               </FieldDescription>
             </FieldContent>
             <div className="flex items-center justify-end gap-2">
@@ -98,6 +99,9 @@ export function AnnotationSettings({
               <Switch
                 checked={keypointEnabled}
                 onCheckedChange={(enabled) => {
+                  // Enabling is a two-step commit: opening the guided setup does
+                  // not flip the flag — the wizard saves keypoint_enabled itself,
+                  // so the switch only shows on once setup is actually complete.
                   if (enabled && !keypointEnabled && onConfigureKeypoints) {
                     onConfigureKeypoints();
                     return;

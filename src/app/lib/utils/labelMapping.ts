@@ -92,8 +92,19 @@ export function getLabelEntry(
 export function normalizeLabelMapping(
   mapping: Record<string, unknown>
 ): Record<string, LabelMappingEntry> {
-  if (typeof mapping.labels === "object" && mapping.labels) {
-    return normalizeLabelMapping(mapping.labels as Record<string, unknown>);
+  // Unwrap a versioned config wrapper ({ version, labels, supercategories }).
+  // Guard against a user category literally named "labels": if `mapping.labels`
+  // is itself a valid label entry (has a numeric id), it is a category, not the
+  // wrapper's label map, so we must NOT recurse — doing so dropped every sibling
+  // category and replaced them with a phantom "id" entry.
+  const inner = mapping.labels;
+  if (
+    inner &&
+    typeof inner === "object" &&
+    !Array.isArray(inner) &&
+    getLabelEntry(inner, "labels") === null
+  ) {
+    return normalizeLabelMapping(inner as Record<string, unknown>);
   }
 
   const result: Record<string, LabelMappingEntry> = {};
@@ -199,4 +210,40 @@ export function keypointSchemasFromConfig(config: {
     })
     .filter((schema): schema is ResolvedKeypointSchema => schema !== null)
     .sort((a, b) => a.label - b.label);
+}
+
+/** Trimmed, non-empty names that appear more than once (case-sensitive). */
+export function duplicateNames(names: string[]): Set<string> {
+  const seen = new Set<string>();
+  const dups = new Set<string>();
+  for (const raw of names) {
+    const name = raw.trim();
+    if (!name) continue;
+    if (seen.has(name)) dups.add(name);
+    seen.add(name);
+  }
+  return dups;
+}
+
+/**
+ * Normalized id values that appear more than once. Blank or non-numeric
+ * entries are ignored; "7", "07" and "7.0" collide (all normalize to "7").
+ * Membership is tested with String(Number(row.value)).
+ */
+export function duplicateIds(ids: string[]): Set<string> {
+  const seen = new Set<string>();
+  const dups = new Set<string>();
+  for (const raw of ids) {
+    if (raw.trim() === "" || Number.isNaN(Number(raw))) continue;
+    const key = String(Number(raw));
+    if (seen.has(key)) dups.add(key);
+    seen.add(key);
+  }
+  return dups;
+}
+
+/** A Label ID cell holds a whole number (blank is allowed and handled elsewhere). */
+export function isIntegerIdString(raw: string): boolean {
+  if (raw.trim() === "") return true;
+  return Number.isInteger(Number(raw));
 }

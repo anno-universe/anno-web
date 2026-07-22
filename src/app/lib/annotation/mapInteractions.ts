@@ -1,13 +1,12 @@
 import Draw, { createBox } from "ol/interaction/Draw";
-import Modify from "ol/interaction/Modify";
 import Select from "ol/interaction/Select";
-import Translate from "ol/interaction/Translate";
 import PointerInteraction from "ol/interaction/Pointer";
-import { click, never } from "ol/events/condition";
+import { click } from "ol/events/condition";
+import MultiPoint from "ol/geom/MultiPoint";
+import Point from "ol/geom/Point";
 import Polygon, { fromExtent } from "ol/geom/Polygon";
 import type MapBrowserEvent from "ol/MapBrowserEvent";
 import type Feature from "ol/Feature";
-import type Collection from "ol/Collection";
 
 // ol/interaction/Pointer's handler signatures receive this event union.
 type BrowserEvt = MapBrowserEvent<PointerEvent | KeyboardEvent | WheelEvent>;
@@ -47,29 +46,6 @@ export function createSelectInteraction(): Select {
     condition: click,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     style: null as any,
-  });
-}
-
-/**
- * Move a whole feature by dragging its interior.
- */
-export function createTranslateInteraction(
-  features: Collection<Feature>
-): Translate {
-  return new Translate({ features });
-}
-
-/**
- * Keypoint edit: drag individual points. No vertex insertion/deletion (point
- * count is fixed once the draw session ends).
- */
-export function createKeypointModifyInteraction(
-  features: Collection<Feature>
-): Modify {
-  return new Modify({
-    features,
-    pixelTolerance: 12,
-    insertVertexCondition: never,
   });
 }
 
@@ -526,6 +502,118 @@ export function createPolygonEditInteraction(
           callbacks.onChange?.();
           evt.map.render();
         }
+      }
+    },
+
+    handleUpEvent() {
+      if (dragged && mode !== "none") callbacks.onEnd?.();
+      mode = "none";
+      vertexIdx = -1;
+      last = null;
+      dragged = false;
+      return false;
+    },
+  });
+}
+
+export interface KeypointEditCallbacks {
+  pixelTolerance?: number;
+  /** Fired on every drag step (vertex moved or group translated). */
+  onChange?: () => void;
+  /** Fired once on pointer-up after an actual drag. */
+  onEnd?: () => void;
+}
+
+/**
+ * Native keypoint vertex editor — ONE PointerInteraction handles both vertex
+ * drag AND whole-group move, replacing the old Modify + Translate pair.
+ *
+ * - Drag a vertex → move just that keypoint.
+ * - Press near the group (but not on a specific vertex) → whole-group move.
+ * - Press outside → returns false so map pan still works.
+ *
+ * Avoids the event-conflict between OL Modify and Translate that prevented
+ * per-point dragging on MultiPoint geometries.
+ */
+export function createKeypointEditInteraction(
+  feature: Feature,
+  callbacks: KeypointEditCallbacks = {},
+): PointerInteraction {
+  const tol = callbacks.pixelTolerance ?? 12;
+  /** Wider radius for whole-group move when user is near but not on a vertex. */
+  const MOVE_TOL = tol * 3;
+
+  let mode: "none" | "vertex" | "move" = "none";
+  let vertexIdx = -1;
+  let last: [number, number] | null = null;
+  let dragged = false;
+
+  function getCoords(): [number, number][] {
+    const g = feature.getGeometry();
+    if (g instanceof MultiPoint) return g.getCoordinates() as [number, number][];
+    if (g instanceof Point) return [g.getCoordinates() as [number, number]];
+    return [];
+  }
+
+  function setCoords(coords: [number, number][]) {
+    const g = feature.getGeometry();
+    if (g instanceof MultiPoint) g.setCoordinates(coords);
+    else if (g instanceof Point) g.setCoordinates(coords[0]);
+  }
+
+  return new PointerInteraction({
+    handleDownEvent(evt: BrowserEvt) {
+      const coords = getCoords();
+      if (coords.length === 0) return false;
+
+      // 1. Nearest vertex — vertex drag.
+      let bestV = -1;
+      let bestVDist = Infinity;
+      for (let i = 0; i < coords.length; i++) {
+        const vp = evt.map.getPixelFromCoordinate(coords[i]);
+        const d = Math.hypot(vp[0] - evt.pixel[0], vp[1] - evt.pixel[1]);
+        if (d < bestVDist) {
+          bestVDist = d;
+          bestV = i;
+        }
+      }
+      if (bestV >= 0 && bestVDist <= tol) {
+        vertexIdx = bestV;
+        mode = "vertex";
+        dragged = false;
+        return true;
+      }
+
+      // 2. Press near the group but not on a vertex → whole-group move.
+      if (bestV >= 0 && bestVDist <= MOVE_TOL) {
+        mode = "move";
+        last = [evt.coordinate[0], evt.coordinate[1]];
+        dragged = false;
+        return true;
+      }
+
+      return false;
+    },
+
+    handleDragEvent(evt: BrowserEvt) {
+      dragged = true;
+      const [cx, cy] = evt.coordinate;
+
+      if (mode === "vertex") {
+        const coords = getCoords();
+        if (vertexIdx < 0 || vertexIdx >= coords.length) return;
+        coords[vertexIdx] = [cx, cy];
+        setCoords(coords);
+        callbacks.onChange?.();
+        evt.map.render();
+      } else if (mode === "move" && last) {
+        const dx = cx - last[0];
+        const dy = cy - last[1];
+        const g = feature.getGeometry();
+        if (g) g.translate(dx, dy);
+        last = [cx, cy];
+        callbacks.onChange?.();
+        evt.map.render();
       }
     },
 

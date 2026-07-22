@@ -96,3 +96,49 @@ export function labelMappingLabels(
 ): Record<string, LabelMappingEntry> {
   return upgradeLabelMappingConfig(raw).labels;
 }
+
+// --- Keypoint edge-set maintenance ---------------------------------------
+// Edges are keyed by a derived schemaKey (`label:{id}` or `supercategory:{name}`).
+// Those keys embed mutable values, so label-editor changes must migrate the map
+// or the annotator's skeleton silently orphans.
+
+/** Move an edge-set to a new key (Label ID or parent-category rename). */
+export function renameKeypointEdgeKey(
+  edges: Record<string, KeypointEdge[]>,
+  fromKey: string,
+  toKey: string
+): Record<string, KeypointEdge[]> {
+  if (fromKey === toKey || !(fromKey in edges)) return edges;
+  const next = { ...edges };
+  const moved = next[fromKey];
+  delete next[fromKey];
+  // Never clobber an existing destination set.
+  if (!(toKey in next)) next[toKey] = moved;
+  return next;
+}
+
+/** Drop an edge-set entirely (e.g. a deleted parent category). */
+export function dropKeypointEdgeKey(
+  edges: Record<string, KeypointEdge[]>,
+  key: string
+): Record<string, KeypointEdge[]> {
+  if (!(key in edges)) return edges;
+  const next = { ...edges };
+  delete next[key];
+  return next;
+}
+
+/** Keep only edge-sets whose key is still a live schema; report the removed keys. */
+export function pruneKeypointEdges(
+  edges: Record<string, KeypointEdge[]>,
+  validKeys: Iterable<string>
+): { edges: Record<string, KeypointEdge[]>; removed: string[] } {
+  const valid = new Set(validKeys);
+  const kept: Record<string, KeypointEdge[]> = {};
+  const removed: string[] = [];
+  for (const [key, value] of Object.entries(edges)) {
+    if (valid.has(key)) kept[key] = value;
+    else removed.push(key);
+  }
+  return { edges: kept, removed };
+}
