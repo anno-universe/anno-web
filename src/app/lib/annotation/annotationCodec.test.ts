@@ -116,10 +116,11 @@ describe("annotationCodec polygon round-trip", () => {
 });
 
 describe("annotationCodec keypoint round-trip", () => {
-  it("preserves ordered keypoint coordinates", () => {
-    const points = [
-      [50, 60],
-      [70, 80],
+  it("preserves ordered keypoint coordinates and visibility", () => {
+    const points: Array<[number, number, 0 | 1 | 2]> = [
+      [50, 60, 2],
+      [70, 80, 1],
+      [0, 0, 0],
     ];
     const ann = makeAnnotation("keypoint", { points });
 

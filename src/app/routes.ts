@@ -19,6 +19,9 @@ const ProjectIndexRedirect = lazy(
 const ProjectSettingsPage = lazy(
   () => import("@/routes/_app.projects.$projectId.settings")
 );
+const ProjectKeypointConfigurationPage = lazy(
+  () => import("@/routes/_app.projects.$projectId.keypoints")
+);
 const ProjectMembersPage = lazy(
   () => import("@/routes/_app.projects.$projectId.members")
 );
@@ -95,6 +98,11 @@ export const router = createBrowserRouter([
             path: "settings",
             Component: ProjectSettingsPage,
             handle: { breadcrumb: "Settings" } as any,
+          },
+          {
+            path: "keypoints",
+            Component: ProjectKeypointConfigurationPage,
+            handle: { breadcrumb: "Keypoints" } as any,
           },
           {
             path: "members",

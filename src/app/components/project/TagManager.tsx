@@ -10,6 +10,8 @@ import { randomLabelColor } from "@/lib/utils/labelMapping";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TableCell, TableRow } from "@/components/ui/table";
+import { SettingsTable } from "@/components/project/SettingsTable";
 import type { TagOutput, TagCreateInput, TagUpdateInput } from "@/types/tag";
 
 interface Row {
@@ -28,17 +30,76 @@ interface Row {
   } | null; // null for new rows
 }
 
+interface TagChanges {
+  creates: TagCreateInput[];
+  updates: { id: number; patch: TagUpdateInput }[];
+  deletes: number[];
+}
+
+const TAG_COLUMNS = [
+  { key: "name", header: "Name" },
+  { key: "display-name", header: "Display name" },
+  { key: "color", header: "Color", className: "w-40" },
+  { key: "active", header: "Active", className: "w-24 text-center" },
+  { key: "actions", className: "w-12" },
+] as const;
+
 export interface TagManagerHandle {
-  collectChanges: () => {
-    creates: TagCreateInput[];
-    updates: { id: number; patch: TagUpdateInput }[];
-    deletes: number[];
-  };
+  collectChanges: () => TagChanges;
 }
 
 interface Props {
   tags: TagOutput[];
   disabled?: boolean;
+  onDirtyChange?: (isDirty: boolean) => void;
+}
+
+function collectTagChanges(rows: Row[], deletedIds: Set<number>): TagChanges {
+  const creates: TagCreateInput[] = [];
+  const updates: { id: number; patch: TagUpdateInput }[] = [];
+  const deletes = Array.from(deletedIds);
+
+  for (const row of rows) {
+    if (row.id == null) {
+      if (row.name.trim() && row.displayName.trim()) {
+        creates.push({
+          name: row.name.trim(),
+          display_name: row.displayName.trim(),
+          color: row.color,
+          description: row.description.trim() || undefined,
+        });
+      }
+      continue;
+    }
+
+    if (!row.original) continue;
+
+    const patch: TagUpdateInput = {};
+    if (row.displayName !== row.original.displayName) {
+      patch.display_name = row.displayName;
+    }
+    if (row.color !== row.original.color) patch.color = row.color;
+    const description = row.description.trim();
+    if (description !== row.original.description) {
+      patch.description = description || null;
+    }
+    if (row.isActive !== row.original.isActive) {
+      patch.is_active = row.isActive;
+    }
+    if (Object.keys(patch).length > 0) {
+      updates.push({ id: row.id, patch });
+    }
+  }
+
+  return { creates, updates, deletes };
+}
+
+function hasTagChanges(changes: TagChanges): boolean {
+  return (
+    changes.creates.length > 0 ||
+    changes.updates.length > 0 ||
+    changes.deletes.length > 0
+  );
 }
 
 /**
@@ -47,7 +108,7 @@ interface Props {
  * via the imperative `collectChanges()` handle.
  */
 export const TagManager = forwardRef<TagManagerHandle, Props>(
-  function TagManager({ tags, disabled = false }, ref) {
+  function TagManager({ tags, disabled = false, onDirtyChange }, ref) {
     const counter = useRef(0);
     const deletedIds = useRef<Set<number>>(new Set());
     const [rows, setRows] = useState<Row[]>(() => tagsToRows(tags));
@@ -78,47 +139,23 @@ export const TagManager = forwardRef<TagManagerHandle, Props>(
       setRows(tagsToRows(tags));
     }, [tags]);
 
-    useImperativeHandle(ref, () => ({
-      collectChanges() {
-        const creates: TagCreateInput[] = [];
-        const updates: { id: number; patch: TagUpdateInput }[] = [];
-        const deletes = Array.from(deletedIds.current);
+    useImperativeHandle(
+      ref,
+      () => ({
+        collectChanges: () => collectTagChanges(rows, deletedIds.current),
+      }),
+      [rows],
+    );
 
-        for (const row of rows) {
-          if (row.id == null) {
-            // New row
-            if (row.name.trim() && row.displayName.trim()) {
-              creates.push({
-                name: row.name.trim(),
-                display_name: row.displayName.trim(),
-                color: row.color,
-                description: row.description.trim() || undefined,
-              });
-            }
-          } else if (row.original) {
-            // Existing row — compute diff
-            const patch: TagUpdateInput = {};
-            if (row.displayName !== row.original.displayName)
-              patch.display_name = row.displayName;
-            if (row.color !== row.original.color) patch.color = row.color;
-            const desc = row.description.trim();
-            if (desc !== row.original.description)
-              patch.description = desc || null;
-            if (row.isActive !== row.original.isActive)
-              patch.is_active = row.isActive;
-            if (Object.keys(patch).length > 0) {
-              updates.push({ id: row.id, patch });
-            }
-          }
-        }
-
-        return { creates, updates, deletes };
-      },
-    }));
+    useEffect(() => {
+      onDirtyChange?.(
+        hasTagChanges(collectTagChanges(rows, deletedIds.current)),
+      );
+    }, [onDirtyChange, rows]);
 
     function update(key: number, patch: Partial<Row>) {
       setRows((prev) =>
-        prev.map((r) => (r.key === key ? { ...r, ...patch } : r))
+        prev.map((r) => (r.key === key ? { ...r, ...patch } : r)),
       );
     }
 
@@ -148,127 +185,120 @@ export const TagManager = forwardRef<TagManagerHandle, Props>(
     }
 
     return (
-      <div className="space-y-2">
-        {rows.length > 0 && (
-          <div className="flex gap-2 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            <span className="flex-1">Name</span>
-            <span className="flex-1">Display name</span>
-            <span className="w-32">Color</span>
-            <span className="w-16 text-center">Active</span>
-            <span className="w-7" />
-          </div>
-        )}
-
-        {rows.map((row) => (
-          <div key={row.key} className="flex items-center gap-2">
-            {/* Name */}
-            {row.id == null ? (
-              <Input
-                type="text"
-                value={row.name}
-                onChange={(e) => update(row.key, { name: e.target.value })}
-                disabled={disabled}
-                placeholder="key"
-                className="flex-1"
-              />
-            ) : (
-              <span className="flex-1 truncate px-3 py-2 font-mono text-sm text-muted-foreground">
-                {row.name}
-              </span>
-            )}
-
-            {/* Display name */}
-            <Input
-              type="text"
-              value={row.displayName}
-              onChange={(e) =>
-                update(row.key, { displayName: e.target.value })
-              }
-              disabled={disabled}
-              placeholder="Display name"
-              className="flex-1"
-            />
-
-            {/* Color */}
-            <div className="flex w-32 items-center gap-1.5">
-              <input
-                type="color"
-                value={row.color}
-                onChange={(e) =>
-                  update(row.key, { color: e.target.value.toUpperCase() })
-                }
-                disabled={disabled}
-                className="h-9 w-9 shrink-0 cursor-pointer rounded-md border bg-background p-1 disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label="Tag color"
-              />
-              <Input
-                type="text"
-                value={row.color}
-                onChange={(e) =>
-                  update(row.key, { color: e.target.value.toUpperCase() })
-                }
-                disabled={disabled}
-                placeholder="#6366F1"
-                className="min-w-0 flex-1 px-2 font-mono text-xs"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() =>
-                  update(row.key, { color: randomLabelColor() })
-                }
-                disabled={disabled}
-                className="h-9 w-7 text-muted-foreground"
-                aria-label="Random color"
-              >
-                <RefreshCw />
-              </Button>
-            </div>
-
-            {/* Active */}
-            <div className="flex w-16 justify-center">
-              <Switch
-                checked={row.isActive}
-                onCheckedChange={(on) => update(row.key, { isActive: on })}
-                disabled={disabled}
-              />
-            </div>
-
-            {/* Delete */}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => remove(row.key)}
-              disabled={disabled}
-              className="h-9 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              aria-label="Delete tag"
-            >
-              <Trash2 />
+      <div className="flex min-w-0 flex-col gap-2">
+        {!disabled && (
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={add}>
+              <Plus data-icon="inline-start" />
+              Add tag
             </Button>
           </div>
-        ))}
-
-        {rows.length === 0 && (
-          <p className="px-1 text-xs text-muted-foreground">
-            No tags defined yet. Create tags to track image annotation progress.
-          </p>
         )}
 
-        {!disabled && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={add}
-            className="border-dashed text-xs text-muted-foreground"
-          >
-            <Plus />
-            Add tag
-          </Button>
-        )}
+        <SettingsTable
+          columns={TAG_COLUMNS}
+          tableClassName="min-w-[40rem]"
+          emptyMessage={
+            rows.length === 0
+              ? "No tags defined yet. Create tags to track image annotation progress."
+              : undefined
+          }
+        >
+          {rows.map((row) => (
+            <TableRow key={row.key}>
+              <TableCell>
+                {row.id == null ? (
+                  <Input
+                    value={row.name}
+                    onChange={(event) =>
+                      update(row.key, { name: event.target.value })
+                    }
+                    disabled={disabled}
+                    placeholder="key"
+                  />
+                ) : (
+                  <span className="font-mono text-sm text-muted-foreground">
+                    {row.name}
+                  </span>
+                )}
+              </TableCell>
+              <TableCell>
+                <Input
+                  value={row.displayName}
+                  onChange={(event) =>
+                    update(row.key, { displayName: event.target.value })
+                  }
+                  disabled={disabled}
+                  placeholder="Display name"
+                />
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="color"
+                    value={row.color}
+                    onChange={(event) =>
+                      update(row.key, {
+                        color: event.target.value.toUpperCase(),
+                      })
+                    }
+                    disabled={disabled}
+                    className="size-9 shrink-0 cursor-pointer rounded-md border bg-background p-1"
+                    aria-label={`${row.displayName || row.name || "Tag"} color`}
+                  />
+                  <Input
+                    value={row.color}
+                    onChange={(event) =>
+                      update(row.key, {
+                        color: event.target.value.toUpperCase(),
+                      })
+                    }
+                    disabled={disabled}
+                    placeholder="#6366F1"
+                    className="font-mono text-xs"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() =>
+                      update(row.key, { color: randomLabelColor() })
+                    }
+                    disabled={disabled}
+                    aria-label="Random color"
+                  >
+                    <RefreshCw />
+                  </Button>
+                </div>
+              </TableCell>
+              <TableCell>
+                <div className="flex justify-center">
+                  <Switch
+                    checked={row.isActive}
+                    onCheckedChange={(isActive) =>
+                      update(row.key, { isActive })
+                    }
+                    disabled={disabled}
+                    aria-label={`${row.displayName || row.name || "Tag"} active`}
+                  />
+                </div>
+              </TableCell>
+              <TableCell>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => remove(row.key)}
+                  disabled={disabled}
+                  aria-label={`Delete tag ${row.displayName || row.name}`}
+                >
+                  <Trash2 />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </SettingsTable>
       </div>
     );
-  }
+  },
 );

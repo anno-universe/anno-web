@@ -10,6 +10,7 @@ import type {
   Polygon2DDataInput,
   Keypoint2DDataInput,
   AnnotationType,
+  KeypointTuple,
 } from "@/types/annotation";
 import { isBoxData, isPointsData } from "@/types/annotation";
 import { flipGeometryY } from "@/lib/annotation/imageProjection";
@@ -46,6 +47,14 @@ export function annotationToFeature(
   feature.set("annotation_type", ann.annotation_type);
   feature.set("label", ann.label);
   feature.set("_backendData", ann.data);
+  if (ann.annotation_type === "keypoint" && isPointsData(ann.data)) {
+    const points = ann.data.points as KeypointTuple[];
+    feature.set("_keypointData", points.map((point) => [...point]));
+    feature.set(
+      "_keypointIndices",
+      points.flatMap((point, index) => (point[2] > 0 ? [index] : []))
+    );
+  }
   return feature;
 }
 
@@ -80,12 +89,27 @@ export function featureToAnnotationInput(
     base.polygon = polygonFeatureToPoints(geometry);
   } else if (annotationType === "keypoint") {
     if (geometry instanceof MultiPoint) {
-      base.keypoint = {
-        points: geometry.getCoordinates().map((c) => [c[0], c[1]]),
-      };
+      const coordinates = geometry.getCoordinates();
+      const stored = feature.get("_keypointData") as KeypointTuple[] | undefined;
+      const indices = feature.get("_keypointIndices") as number[] | undefined;
+      if (stored && indices && indices.length === coordinates.length) {
+        const points = stored.map((point) => [...point] as KeypointTuple);
+        indices.forEach((sourceIndex, coordinateIndex) => {
+          points[sourceIndex] = [
+            coordinates[coordinateIndex][0],
+            coordinates[coordinateIndex][1],
+            points[sourceIndex][2],
+          ];
+        });
+        base.keypoint = { points };
+      } else {
+        base.keypoint = {
+          points: coordinates.map((c) => [c[0], c[1], 2]),
+        };
+      }
     } else if (geometry instanceof Point) {
       const coords = geometry.getCoordinates();
-      base.keypoint = { points: [[coords[0], coords[1]]] };
+      base.keypoint = { points: [[coords[0], coords[1], 2]] };
     }
   }
 
@@ -251,24 +275,45 @@ export function polygonFeatureToPoints(geometry: Polygon): Polygon2DDataInput {
 
 /** Build a MultiPoint geometry from an ordered list of keypoint coordinates. */
 export function keypointPointsToGeometry(points: number[][]): MultiPoint {
-  return new MultiPoint(points.map((p) => [p[0], p[1]]));
+  return new MultiPoint(
+    points.filter((point) => (point[2] ?? 2) > 0).map((p) => [p[0], p[1]])
+  );
 }
 
-export function keypointToFeature(points: number[][]): Feature {
+export function keypointToFeature(points: KeypointTuple[]): Feature {
   if (points.length === 0) throw new Error("No points for keypoint");
   const feature = new Feature(keypointPointsToGeometry(points));
   feature.set("annotation_type", "keypoint");
+  feature.set("_keypointData", points.map((point) => [...point]));
+  feature.set(
+    "_keypointIndices",
+    points.flatMap((point, index) => (point[2] > 0 ? [index] : []))
+  );
   return feature;
 }
 
 export function featureToKeypoint(feature: Feature): Keypoint2DDataInput {
   const geom = feature.getGeometry();
   if (geom instanceof MultiPoint) {
-    return { points: geom.getCoordinates().map((c) => [c[0], c[1]]) };
+    const coordinates = geom.getCoordinates();
+    const stored = feature.get("_keypointData") as KeypointTuple[] | undefined;
+    const indices = feature.get("_keypointIndices") as number[] | undefined;
+    if (stored && indices && indices.length === coordinates.length) {
+      const points = stored.map((point) => [...point] as KeypointTuple);
+      indices.forEach((sourceIndex, coordinateIndex) => {
+        points[sourceIndex] = [
+          coordinates[coordinateIndex][0],
+          coordinates[coordinateIndex][1],
+          points[sourceIndex][2],
+        ];
+      });
+      return { points };
+    }
+    return { points: coordinates.map((c) => [c[0], c[1], 2]) };
   }
   if (geom instanceof Point) {
     const coords = geom.getCoordinates();
-    return { points: [[coords[0], coords[1]]] };
+    return { points: [[coords[0], coords[1], 2]] };
   }
   throw new Error("Expected MultiPoint/Point geometry for keypoint");
 }

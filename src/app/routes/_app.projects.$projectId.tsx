@@ -35,7 +35,7 @@ export default function ProjectLayout() {
     () => () => {
       void projectQuery.refetch();
     },
-    [projectQuery.refetch]
+    [projectQuery.refetch],
   );
 
   // Register project name as a dynamic breadcrumb segment.
@@ -95,9 +95,11 @@ export default function ProjectLayout() {
         <div>
           <h1 className="text-xl font-semibold text-foreground">
             {project.name}{" "}
-            <span className="text-muted-foreground tabular-nums">#{project.id}</span>
+            <span className="text-muted-foreground tabular-nums">
+              #{project.id}
+            </span>
           </h1>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <ProjectRoleBadge role={project.my_role} />
             {project.description && (
               <span className="text-sm text-muted-foreground">
@@ -111,7 +113,7 @@ export default function ProjectLayout() {
       {isWorker && <RoleNotice area="project settings" className="mb-6" />}
 
       {/* Tab navigation */}
-      <div className="flex gap-2 border-b pb-2 mb-6">
+      <div className="mb-6 flex flex-wrap gap-2 border-b pb-2">
         <NavLink
           to={`/projects/${id}/images${imagesSearch}`}
           end
@@ -120,11 +122,7 @@ export default function ProjectLayout() {
           Images
         </NavLink>
         {isSupervisor && (
-          <NavLink
-            to={`/projects/${id}/members`}
-            end
-            className={tabClassName}
-          >
+          <NavLink to={`/projects/${id}/members`} end className={tabClassName}>
             Members
           </NavLink>
         )}
@@ -147,19 +145,11 @@ export default function ProjectLayout() {
           </NavLink>
         )}
         {isSupervisor && (
-          <NavLink
-            to={`/projects/${id}/exports`}
-            end
-            className={tabClassName}
-          >
+          <NavLink to={`/projects/${id}/exports`} end className={tabClassName}>
             Exports
           </NavLink>
         )}
-        <NavLink
-          to={`/projects/${id}/settings`}
-          end
-          className={tabClassName}
-        >
+        <NavLink to={`/projects/${id}/settings`} end className={tabClassName}>
           Settings
         </NavLink>
       </div>

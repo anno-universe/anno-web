@@ -1,4 +1,5 @@
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldContent,
@@ -17,6 +18,8 @@ interface Props {
   /** The raw meta_info object from the project (read/write via onChange). */
   value: MetaInfoConfigV2;
   onChange: (meta: MetaInfoConfigV2) => void;
+  onConfigureKeypoints?: () => void;
+  keypointConfigurationAvailable?: boolean;
   disabled?: boolean;
 }
 
@@ -25,17 +28,21 @@ interface Props {
  * project settings page. Presents annotation-related feature flags as labelled
  * toggles / inputs while reading/writing plain meta_info keys.
  */
-export function AnnotationSettings({ value, onChange, disabled }: Props) {
+export function AnnotationSettings({
+  value,
+  onChange,
+  onConfigureKeypoints,
+  keypointConfigurationAvailable = true,
+  disabled,
+}: Props) {
   function setMeta(key: string, v: unknown) {
     const next = { ...value, version: PROJECT_CONFIG_VERSION, [key]: v };
     onChange(next as MetaInfoConfigV2);
   }
 
-  const boxRotation =
-    value.box_rotation_enabled === true;
+  const boxRotation = value.box_rotation_enabled === true;
 
-  const keypointEnabled =
-    value.keypoint_enabled === true; // default off
+  const keypointEnabled = value.keypoint_enabled === true;
 
   return (
     <FieldGroup className="gap-4">
@@ -44,7 +51,7 @@ export function AnnotationSettings({ value, onChange, disabled }: Props) {
         <FieldLegend variant="label" className="px-1">
           Box annotation
         </FieldLegend>
-        <Field orientation="horizontal">
+        <Field orientation="responsive">
           <FieldContent>
             <FieldTitle>Rotation handle</FieldTitle>
             <FieldDescription>
@@ -52,33 +59,58 @@ export function AnnotationSettings({ value, onChange, disabled }: Props) {
               adjust the angle.
             </FieldDescription>
           </FieldContent>
-          <Switch
-            checked={boxRotation}
-            onCheckedChange={(on) => setMeta("box_rotation_enabled", on)}
-            disabled={disabled}
-          />
+          <div className="flex justify-end">
+            <Switch
+              checked={boxRotation}
+              onCheckedChange={(on) => setMeta("box_rotation_enabled", on)}
+              disabled={disabled}
+              aria-label="Enable box rotation handles"
+            />
+          </div>
         </Field>
       </FieldSet>
 
       {/* ---- Keypoint ---- */}
-      <FieldSet className="rounded-md border px-4 py-3">
-        <FieldLegend variant="label" className="px-1">
-          Keypoint annotation
-        </FieldLegend>
-        <Field orientation="horizontal">
-          <FieldContent>
-            <FieldTitle>Show keypoint tool</FieldTitle>
-            <FieldDescription>
-              Let annotators place keypoint markers on images.
-            </FieldDescription>
-          </FieldContent>
-          <Switch
-            checked={keypointEnabled}
-            onCheckedChange={(on) => setMeta("keypoint_enabled", on)}
-            disabled={disabled}
-          />
-        </Field>
-      </FieldSet>
+      {keypointConfigurationAvailable ? (
+        <FieldSet className="rounded-md border px-4 py-3">
+          <FieldLegend variant="label" className="px-1">
+            Keypoint annotation
+          </FieldLegend>
+          <Field orientation="responsive">
+            <FieldContent>
+              <FieldTitle>Enable keypoint annotation</FieldTitle>
+              <FieldDescription>
+                Configure the point schema and connections in the guided setup.
+                Turning the tool off keeps the existing configuration.
+              </FieldDescription>
+            </FieldContent>
+            <div className="flex items-center justify-end gap-2">
+              {!disabled && keypointEnabled && onConfigureKeypoints ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onConfigureKeypoints}
+                >
+                  Configure
+                </Button>
+              ) : null}
+              <Switch
+                checked={keypointEnabled}
+                onCheckedChange={(enabled) => {
+                  if (enabled && !keypointEnabled && onConfigureKeypoints) {
+                    onConfigureKeypoints();
+                    return;
+                  }
+                  setMeta("keypoint_enabled", enabled);
+                }}
+                disabled={disabled}
+                aria-label="Enable keypoint annotation"
+              />
+            </div>
+          </Field>
+        </FieldSet>
+      ) : null}
     </FieldGroup>
   );
 }

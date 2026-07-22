@@ -4928,12 +4928,28 @@
         "type": "object"
       },
       "Keypoint2DDataInput": {
+        "description": "COCO keypoints as ``[x, y, visibility]`` triples.\n\nVisibility is 0 for absent, 1 for labelled-but-occluded, and 2 for visible.\nAbsent points use the canonical ``[0, 0, 0]`` representation.",
         "properties": {
           "points": {
             "items": {
-              "items": {
-                "type": "number"
-              },
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "enum": [
+                    0,
+                    1,
+                    2
+                  ],
+                  "type": "integer"
+                }
+              ],
               "type": "array"
             },
             "title": "Points",

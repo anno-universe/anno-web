@@ -13,8 +13,11 @@ export interface Polygon2DDataInput {
 }
 
 export interface Keypoint2DDataInput {
-  points: number[][];
+  points: KeypointTuple[];
 }
+
+export type KeypointVisibility = 0 | 1 | 2;
+export type KeypointTuple = [x: number, y: number, visibility: KeypointVisibility];
 
 export interface Annotation2DCreateInput {
   annotation_type: AnnotationType;

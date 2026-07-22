@@ -16,6 +16,7 @@ import ImageLayer from "ol/layer/Image";
 import StaticImage from "ol/source/ImageStatic";
 import Point from "ol/geom/Point";
 import MultiPoint from "ol/geom/MultiPoint";
+import LineString from "ol/geom/LineString";
 import Polygon from "ol/geom/Polygon";
 import Modify from "ol/interaction/Modify";
 import DoubleClickZoom from "ol/interaction/DoubleClickZoom";
@@ -62,7 +63,10 @@ import type {
   Annotation2DOutput,
   Annotation2DCreateInput,
   AnnotationType,
+  KeypointTuple,
 } from "@/types/annotation";
+import type { KeypointEdge } from "@/lib/project/configVersion";
+import type { ResolvedKeypointSchema } from "@/lib/utils/labelMapping";
 import type { ToolType } from "./StatusBar";
 
 import GeoJSON from "ol/format/GeoJSON";
@@ -168,6 +172,15 @@ interface Props {
   onEditStateChange?: (dirty: boolean) => void;
   /** Report the number of points in the in-progress keypoint group */
   onKeypointDraftChange?: (count: number) => void;
+  /** Controlled keypoint draft rendered in image-pixel coordinates. */
+  keypointDraft?: {
+    names: string[];
+    points: KeypointTuple[];
+    edges: KeypointEdge[];
+  } | null;
+  onKeypointPoint?: (x: number, y: number) => void;
+  keypointSchemas?: ResolvedKeypointSchema[];
+  keypointEdges?: Record<string, KeypointEdge[]>;
   /** Project flag: expose a rotation handle when editing/drafting boxes. */
   boxRotationEnabled?: boolean;
   /** Called when a SAM point is placed (image-pixel coordinates). */
@@ -204,6 +217,10 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       overlayContainerRef,
       onEditStateChange,
       onKeypointDraftChange,
+      keypointDraft,
+      onKeypointPoint,
+      keypointSchemas = [],
+      keypointEdges = {},
       boxRotationEnabled,
       onSamPoint,
       onSamBox,
@@ -280,6 +297,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     const onAnnotationContextMenuRef = useRef(onAnnotationContextMenu);
     const onEditStateChangeRef = useRef(onEditStateChange);
     const onKeypointDraftChangeRef = useRef(onKeypointDraftChange);
+    const onKeypointPointRef = useRef(onKeypointPoint);
     const boxRotationEnabledRef = useRef(boxRotationEnabled);
     const onSamPointRef = useRef(onSamPoint);
     const onSamBoxRef = useRef(onSamBox);
@@ -297,6 +315,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
     onAnnotationContextMenuRef.current = onAnnotationContextMenu;
     onEditStateChangeRef.current = onEditStateChange;
     onKeypointDraftChangeRef.current = onKeypointDraftChange;
+    onKeypointPointRef.current = onKeypointPoint;
     boxRotationEnabledRef.current = boxRotationEnabled;
     onSamPointRef.current = onSamPoint;
     onSamBoxRef.current = onSamBox;
@@ -571,31 +590,6 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       onKeypointDraftChangeRef.current?.(0);
     }, []);
 
-    const rebuildDraft = useCallback(() => {
-      const src = draftSourceRef.current;
-      if (!src) return;
-      src.clear();
-      keypointDraftRef.current.forEach((p, i) => {
-        const f = new Feature(new Point([p[0], p[1]]));
-        f.set("index", i);
-        src.addFeature(f);
-      });
-    }, []);
-
-    const addKeypointPoint = useCallback(
-      (coord: number[]) => {
-        keypointDraftRef.current = [
-          ...keypointDraftRef.current,
-          [coord[0], coord[1]],
-        ];
-        rebuildDraft();
-        const n = keypointDraftRef.current.length;
-        onDrawPreviewRef.current?.(`${n} point${n === 1 ? "" : "s"}`);
-        onKeypointDraftChangeRef.current?.(n);
-      },
-      [rebuildDraft]
-    );
-
     const finishKeypointGroup = useCallback(() => {
       const pts = keypointDraftRef.current;
       if (pts.length >= 1) {
@@ -608,7 +602,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
           label: null,
           box: null,
           polygon: null,
-          keypoint: { points: coords.map((c) => [c[0], height - c[1]]) },
+          keypoint: { points: coords.map((c) => [c[0], height - c[1], 2]) },
         });
       }
       clearKeypointDraft();
@@ -954,11 +948,23 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       });
 
       annotations.forEach((ann) => {
+        const decorateKeypoint = (feature: Feature) => {
+          if (ann.annotation_type !== "keypoint") return;
+          const schema = keypointSchemas.find((candidate) => candidate.label === ann.label);
+          feature.set("_keypointNames", schema?.keypoints ?? []);
+          feature.set("_keypointEdges", schema ? keypointEdges[schema.schemaKey] ?? [] : []);
+        };
         const existing = source.getFeatureById(ann.id);
         if (!existingIds.has(ann.id) || !existing) {
-          source.addFeature(annotationToFeature(ann, height));
+          const feature = annotationToFeature(ann, height);
+          decorateKeypoint(feature);
+          source.addFeature(feature);
           return;
         }
+
+        // Schema names and edges are project configuration rather than part of
+        // the annotation payload, so refresh them even when annotation data is unchanged.
+        decorateKeypoint(existing);
 
         const currentData = existing.get("_backendData");
         const currentType = existing.get("annotation_type");
@@ -971,13 +977,49 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
           existing.set("annotation_type", ann.annotation_type);
           existing.set("label", ann.label);
           existing.set("_backendData", ann.data);
+          existing.set("_keypointData", updated.get("_keypointData"));
+          existing.set("_keypointIndices", updated.get("_keypointIndices"));
           existing.setGeometry(updated.getGeometry() ?? undefined);
           existing.changed();
         }
       });
 
       vectorSourceRef.current?.changed();
-    }, [annotations, height]);
+    }, [annotations, height, keypointSchemas, keypointEdges]);
+
+    // Render the controlled schema-driven keypoint draft and its configured edges.
+    useEffect(() => {
+      const source = draftSourceRef.current;
+      if (!source) return;
+      source.clear();
+      if (!keypointDraft) return;
+
+      const positions = new globalThis.Map<number, [number, number]>();
+      keypointDraft.points.forEach((point, index) => {
+        if (point[2] === 0) return;
+        const coordinate: [number, number] = [point[0], height - point[1]];
+        positions.set(index, coordinate);
+        const feature = new Feature(new Point(coordinate));
+        feature.set("index", index);
+        feature.set("name", keypointDraft.names[index] ?? String(index));
+        feature.set("visibility", point[2]);
+        source.addFeature(feature);
+      });
+
+      const nameToIndex = new globalThis.Map(
+        keypointDraft.names.map((name, index) => [name, index] as const)
+      );
+      keypointDraft.edges.forEach(([from, to]) => {
+        const fromIndex = nameToIndex.get(from);
+        const toIndex = nameToIndex.get(to);
+        const a = fromIndex == null ? undefined : positions.get(fromIndex);
+        const b = toIndex == null ? undefined : positions.get(toIndex);
+        if (!a || !b) return;
+        const feature = new Feature(new LineString([a, b]));
+        feature.set("_edge", true);
+        source.addFeature(feature);
+      });
+    }, [keypointDraft, height]);
 
     useEffect(() => {
       refreshFeatureStyles([
@@ -1118,15 +1160,14 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       const map = mapRef.current;
       if (!map || activeTool !== "draw-point") return;
 
-      // Keypoint groups: single-click adds a numbered point, double-click
-      // finishes. singleclick is suppressed by OL on the 2nd click of a
-      // dblclick, so finishing never adds a stray point.
+      // The parent workflow owns schema order and completion. This layer only
+      // converts map clicks to image-pixel coordinates and suppresses zoom.
       dblClickZoomRef.current?.setActive(false);
-      const onSingle = (e: any) => addKeypointPoint(e.coordinate);
-      const onDbl = (e: any) => {
-        finishKeypointGroup();
-        e.stopPropagation();
+      const onSingle = (e: any) => {
+        const point = mapToImage(e.coordinate, height);
+        onKeypointPointRef.current?.(point.x, point.y);
       };
+      const onDbl = (e: any) => e.stopPropagation();
       map.on("singleclick", onSingle);
       map.on("dblclick", onDbl);
       keypointHandlersRef.current = { onSingle, onDbl };
@@ -1141,8 +1182,7 @@ export const AnnotationMap = forwardRef<AnnotationMapHandle, Props>(
       };
     }, [
       activeTool,
-      addKeypointPoint,
-      finishKeypointGroup,
+      height,
     ]);
 
     // ---- SAM point tool ----
